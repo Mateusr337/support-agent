@@ -1,0 +1,61 @@
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+  text-align: center;
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+}
+
+.subtitle {
+  margin: 0 0 2rem;
+  color: #94a3b8;
+}
+
+.status-card {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.status-row + .status-row {
+  border-top: 1px solid #334155;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+}
+
+.badge-loading {
+  background: #334155;
+  color: #94a3b8;
+}
+
+.badge-ok {
+  background: #14532d;
+  color: #86efac;
+}
+
+.badge-error {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+
+.message {
+  color: #cbd5e1;
+}
