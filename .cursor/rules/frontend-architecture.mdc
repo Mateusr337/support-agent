@@ -52,10 +52,12 @@ frontend/
 │   │   ├── auth.ts                 # auth domain types
 │   │   └── chat.ts                 # chat domain / UI model types
 │   │
-│   ├── hooks/                      # shared hooks (cross-feature)
 │   ├── lib/                        # utilities (env, formatters, constants)
-│   │   └── env.ts
-│   └── styles/                     # global / shared CSS modules
+│   │   ├── env.ts
+│   │   └── authStorage.ts
+│   │
+│   ├── hooks/                      # optional — shared cross-feature hooks
+│   └── styles/                     # optional — global / shared CSS modules
 │
 ├── index.html
 ├── tsconfig.json

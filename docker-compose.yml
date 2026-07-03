@@ -57,7 +57,7 @@ services:
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
-      - ./frontend/vite.config.js:/app/vite.config.js
+      - ./frontend/vite.config.ts:/app/vite.config.ts
     depends_on:
       - backend
 

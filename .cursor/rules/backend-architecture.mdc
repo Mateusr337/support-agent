@@ -6,11 +6,11 @@ alwaysApply: false
 
 # Backend Architecture
 
-Stack: FastAPI, SQLAlchemy, PostgreSQL, Qdrant.
+Stack: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Qdrant.
 
 Pattern: **Service + Repository** (similar to NestJS/Express with an isolated data layer).
 
-## Folder structure
+## Folder structure (current)
 
 ```
 backend/
@@ -20,37 +20,42 @@ backend/
 │   ├── core/                   # Infrastructure (no business rules)
 │   │   ├── config.py
 │   │   ├── database.py         # engine, SessionLocal, get_db
+│   │   ├── security.py         # JWT, password hashing
 │   │   ├── qdrant.py           # Qdrant client
 │   │   └── llm/                # LLM adapters (chat/completion)
-│   │       ├── base.py         # common protocol/interface
+│   │       ├── base.py         # LLMProvider protocol
 │   │       ├── openai.py
-│   │       ├── anthropic.py
 │   │       └── factory.py      # get_llm_provider() via config
 │   │
 │   ├── api/                    # HTTP — feature folders + central router
 │   │   └── v1/
 │   │       ├── router.py       # aggregates routers from each feature
-│   │       ├── health/
-│   │       │   └── routes.py
-│   │       └── chat/
-│   │           ├── routes.py
-│   │           └── schemas.py  # DTOs colocated with the feature
+│   │       ├── dependencies.py # shared FastAPI deps (services)
+│   │       ├── responses.py    # shared OpenAPI error responses
+│   │       ├── auth/
+│   │       │   ├── routes.py
+│   │       │   ├── schemas.py
+│   │       │   └── dependencies.py  # get_current_user
+│   │       ├── users/
+│   │       │   ├── routes.py
+│   │       │   └── schemas.py
+│   │       ├── chat/
+│   │       │   ├── routes.py
+│   │       │   └── schemas.py
+│   │       └── health/
+│   │           └── routes.py
 │   │
-│   ├── models/                 # SQLAlchemy ORM (table definitions only)
-│   ├── repositories/           # Data access (Postgres, Qdrant)
+│   ├── models/                 # SQLAlchemy ORM (user, chat_session, chat_message)
+│   ├── repositories/           # Data access (Postgres; Qdrant when RAG lands)
 │   ├── services/               # Business logic; instantiates repos in __init__
-│   ├── agents/                 # Agent orchestration, prompts, and tools
-│   └── rag/
-│       ├── embeddings/         # embedding adapters (OpenAI, etc.)
-│       ├── ingest.py
-│       └── retriever.py
+│   └── agents/                 # Agent orchestration and prompts
+│       ├── support_agent.py    # RAG + LLM reply loop (ready, not wired to chat yet)
+│       └── prompts.py
 │
-├── alembic/
+├── alembic/                    # migrations run on container startup
 ├── tests/
 │   ├── conftest.py             # shared fixtures (client, db, auth helpers)
-│   ├── unit/                   # services, core — mocked dependencies
-│   │   ├── services/
-│   │   └── core/
+│   ├── unit/                   # services, core, repositories — mocked deps
 │   └── api/                    # HTTP tests via TestClient
 ├── requirements.txt
 ├── requirements-dev.txt        # pytest, pytest-cov, httpx (local/CI only)
@@ -58,6 +63,17 @@ backend/
 ├── .coveragerc
 └── Dockerfile
 ```
+
+## Planned (not yet in repo)
+
+```
+app/rag/
+├── embeddings/         # embedding adapters (OpenAI, etc.)
+├── ingest.py
+└── retriever.py
+```
+
+Additional LLM vendors (e.g. `core/llm/anthropic.py`) and `agents/tools/` follow the same adapter pattern when needed.
 
 ## Layer responsibilities
 
@@ -68,29 +84,39 @@ backend/
 | `models/` | ORM table/relationship definitions | `core/database` |
 | `repositories/` | Queries and persistence (Postgres, Qdrant) | `models`, `core/` |
 | `services/` | Business rules, transactions, orchestration | `repositories`, `agents`, `rag` |
-| `agents/` | Prompts, tool calling, agent loop | `core/llm`, `repositories`, `rag` |
-| `rag/` | Ingestion, retrieval, and vector search | `rag/embeddings`, `repositories` |
-| `core/llm/` | LLM adapters (OpenAI, Anthropic, Ollama…) | env vars |
-| `rag/embeddings/` | Embedding adapters (may use a different vendor than the LLM) | env vars |
-| `core/` | Config, DB, Qdrant | env vars |
+| `agents/` | Prompts, RAG context assembly, agent loop | `core/llm`, `rag` |
+| `rag/` *(planned)* | Ingestion, retrieval, and vector search | `rag/embeddings`, Qdrant |
+| `core/llm/` | LLM adapters (OpenAI today) | env vars |
+| `core/` | Config, DB, Qdrant, security | env vars |
 
 ## Request flow
 
+**Today (chat without RAG):**
+
+```
+Client → api/v1/chat → ChatService → repositories → PostgreSQL
+                              ↘ stub reply (SupportAgent not wired yet)
+```
+
+**Target (RAG + LLM):**
+
 ```
 Client → api/ (route + DTO) → services/ → repositories/ → PostgreSQL / Qdrant
-                                ↘ agents/ → core/llm/ (chat)
-                                         ↘ rag/ → embeddings/ + Qdrant
+                                ↘ agents/support_agent → core/llm/ (chat)
+                                                       ↘ rag/ → embeddings/ + Qdrant
 ```
 
 ## LLM providers
 
-Vendor adapters live in `core/llm/` (chat) and `rag/embeddings/` (vectors).
+Vendor adapters live in `core/llm/` (chat) and, when added, `rag/embeddings/` (vectors).
 They implement a common interface — no prompts, tool calling, or business rules.
 
-| Type | Location |
-|------|----------|
-| LLM chat | `core/llm/` |
-| Embeddings | `rag/embeddings/` |
+| Type | Location | Status |
+|------|----------|--------|
+| LLM chat | `core/llm/` | OpenAI implemented |
+| Embeddings | `rag/embeddings/` | Planned |
+
+Env vars: `LLM_PROVIDER`, `LLM_MODEL`, `OPENAI_API_KEY` (see root `.env.example`).
 
 `get_db` lives in `core/database.py`. Services instantiate repos — routes only pass the session.
 
@@ -123,28 +149,18 @@ pip install -r requirements-dev.txt
 pytest --cov=app --cov-report=term-missing
 ```
 
-Use `app.dependency_overrides` in `conftest.py` to swap `get_db` and other FastAPI dependencies. Target: **≥ 90% coverage** on `app/`.
+Use `app.dependency_overrides` in `conftest.py` to swap `get_db` and other FastAPI dependencies. Target: **≥ 90% coverage** on `app/` (currently ~95%).
 
 ## Where to put new code
 
 - New HTTP feature → `api/v1/<feature>/routes.py` + register in `api/v1/router.py`
 - Feature DTOs → `api/v1/<feature>/schemas.py`
-- DB table → `models/<entity>.py`
+- DB table → `models/<entity>.py` + Alembic migration
 - Query/persistence → `repositories/<entity>_repository.py`
 - Business rule → `services/<domain>_service.py`
-- LLM adapter (chat) → `core/llm/<vendor>.py`
+- LLM adapter (chat) → `core/llm/<vendor>.py` + register in `factory.py`
 - Embedding adapter → `rag/embeddings/<vendor>.py`
 - Agent tool → `agents/tools/`
 - Ingestion/retrieval → `rag/`
 - Unit test → `tests/unit/<layer>/test_<module>.py`
 - API test → `tests/api/test_<feature>.py`
-
-## Legacy (flat) code migration
-
-| Current | Target |
-|---------|--------|
-| `app/config.py` | `app/core/config.py` |
-| `app/database.py` | `app/core/database.py` |
-| `app/qdrant.py` | `app/core/qdrant.py` |
-| routes in `main.py` | `app/api/v1/<feature>/routes.py` + `app/api/v1/router.py` |
-| `main.py` | bootstrap + `app.include_router(v1_router, prefix="/api/v1")` |
