@@ -68,6 +68,7 @@ def test_list_delegates_to_repository(db_session):
     )
     db_session.commit()
 
-    logs = service.list(session_id=session.id, user_id=user.id, turn_id=turn_id)
+    logs, has_more = service.list(session_id=session.id, user_id=user.id, turn_id=turn_id)
     assert len(logs) == 1
     assert logs[0].message == "Processing"
+    assert has_more is False

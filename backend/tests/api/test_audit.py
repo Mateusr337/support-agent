@@ -38,14 +38,57 @@ def test_list_audit_logs_success(client: TestClient, db_session, auth_headers, r
     response = client.get("/api/v1/audit/logs", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
-    assert len(data) >= 2
+    assert len(data["items"]) >= 2
+    assert "has_more" in data
 
     response = client.get(f"/api/v1/audit/logs?session_id={session_id}", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
-    assert data[0]["message"] == "Test log 2"
-    assert data[1]["message"] == "Test log 1"
+    assert len(data["items"]) == 2
+    assert data["items"][0]["message"] == "Test log 2"
+    assert data["items"][1]["message"] == "Test log 1"
+    assert data["has_more"] is False
+
+
+def test_list_audit_logs_paginates(client: TestClient, db_session, auth_headers, registered_user):
+    session = ChatSession(user_id=registered_user["id"])
+    db_session.add(session)
+    db_session.commit()
+
+    turn_id = uuid4()
+    for index in range(30):
+        db_session.add(
+            AuditLog(
+                session_id=session.id,
+                user_id=registered_user["id"],
+                turn_id=turn_id,
+                type="agent_request",
+                status="info",
+                message=f"Log {index}",
+            )
+        )
+    db_session.commit()
+
+    first_page = client.get(
+        "/api/v1/audit/logs",
+        headers=auth_headers,
+        params={"limit": 25},
+    )
+    assert first_page.status_code == 200
+    first_data = first_page.json()
+    assert len(first_data["items"]) == 25
+    assert first_data["has_more"] is True
+
+    offset = first_data["items"][-1]["id"]
+    second_page = client.get(
+        "/api/v1/audit/logs",
+        headers=auth_headers,
+        params={"limit": 25, "offset": offset},
+    )
+    assert second_page.status_code == 200
+    second_data = second_page.json()
+    assert len(second_data["items"]) == 5
+    assert second_data["has_more"] is False
 
 
 def test_list_audit_logs_without_auth_returns_401(client: TestClient):

@@ -16,3 +16,8 @@ class AuditLogResponse(BaseModel):
     message: str
     data: dict | None
     created_at: datetime
+
+
+class AuditLogsPageResponse(BaseModel):
+    items: list[AuditLogResponse]
+    has_more: bool

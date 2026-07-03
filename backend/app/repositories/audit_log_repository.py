@@ -40,7 +40,9 @@ class AuditLogRepository:
         session_id: UUID | None = None,
         user_id: int | None = None,
         turn_id: UUID | None = None,
-    ) -> list[AuditLog]:
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> tuple[list[AuditLog], bool]:
         stmt = select(AuditLog)
         if session_id is not None:
             stmt = stmt.where(AuditLog.session_id == session_id)
@@ -48,5 +50,14 @@ class AuditLogRepository:
             stmt = stmt.where(AuditLog.user_id == user_id)
         if turn_id is not None:
             stmt = stmt.where(AuditLog.turn_id == turn_id)
-        stmt = stmt.order_by(AuditLog.created_at.desc())
-        return list(self._db.execute(stmt).scalars().all())
+
+        if limit is None:
+            stmt = stmt.order_by(AuditLog.created_at.desc())
+            return list(self._db.execute(stmt).scalars().all()), False
+
+        if offset is not None:
+            stmt = stmt.where(AuditLog.id < offset)
+        stmt = stmt.order_by(AuditLog.id.desc()).limit(limit + 1)
+        rows = list(self._db.execute(stmt).scalars().all())
+        has_more = len(rows) > limit
+        return rows[:limit], has_more

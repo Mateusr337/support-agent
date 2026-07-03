@@ -77,11 +77,15 @@ class AuditLogService:
         session_id: UUID | None = None,
         user_id: int | None = None,
         turn_id: UUID | None = None,
-    ) -> list[AuditLog]:
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> tuple[list[AuditLog], bool]:
         return self._repository.list(
             session_id=session_id,
             user_id=user_id,
             turn_id=turn_id,
+            limit=limit,
+            offset=offset,
         )
 
     def _create(
