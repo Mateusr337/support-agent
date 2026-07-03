@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, UseChatReturn } from "../../../types/chat";
 import { ApiError } from "../../../services/api";
 import { chatService, PAGE_SIZE } from "../../../services/chatService";
@@ -19,6 +19,7 @@ export function useChat(): UseChatReturn {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const loadingOlderRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,7 +65,7 @@ export function useChat(): UseChatReturn {
   }, []);
 
   const loadOlderMessages = useCallback(async () => {
-    if (!sessionId || loadingOlder || !hasMoreOlder) {
+    if (!sessionId || loadingOlderRef.current || !hasMoreOlder) {
       return;
     }
 
@@ -73,6 +74,7 @@ export function useChat(): UseChatReturn {
       return;
     }
 
+    loadingOlderRef.current = true;
     setLoadingOlder(true);
     setError("");
 
@@ -93,9 +95,10 @@ export function useChat(): UseChatReturn {
           : "Unable to load older messages. Please try again."
       );
     } finally {
+      loadingOlderRef.current = false;
       setLoadingOlder(false);
     }
-  }, [sessionId, loadingOlder, hasMoreOlder, messages]);
+  }, [sessionId, hasMoreOlder, messages]);
 
   const sendMessage = useCallback(
     async (content: string) => {

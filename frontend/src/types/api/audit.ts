@@ -10,7 +10,14 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface AuditLogsPageResponse {
+  items: AuditLog[];
+  has_more: boolean;
+}
+
 export interface GetAuditLogsParams {
   session_id?: string;
   turn_id?: string;
+  limit?: number;
+  offset?: number;
 }

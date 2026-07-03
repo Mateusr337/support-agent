@@ -1,7 +1,6 @@
 .message-list {
   flex: 1;
   overflow-y: auto;
-  scroll-behavior: smooth;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;

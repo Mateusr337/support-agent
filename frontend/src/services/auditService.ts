@@ -1,18 +1,22 @@
 import { apiRequest } from './api';
-import { AuditLog, GetAuditLogsParams } from '../types/api/audit';
+import { AuditLogsPageResponse, GetAuditLogsParams } from '../types/api/audit';
+
+export const PAGE_SIZE = 25;
 
 export const auditService = {
-  getLogs: async (params?: GetAuditLogsParams): Promise<AuditLog[]> => {
-    let query = '';
-    if (params) {
-      const searchParams = new URLSearchParams();
-      if (params.session_id) searchParams.append('session_id', params.session_id);
-      if (params.turn_id) searchParams.append('turn_id', params.turn_id);
-      const queryString = searchParams.toString();
-      if (queryString) {
-        query = `?${queryString}`;
-      }
+  getLogs: async (params?: GetAuditLogsParams): Promise<AuditLogsPageResponse> => {
+    const searchParams = new URLSearchParams({
+      limit: String(params?.limit ?? PAGE_SIZE),
+    });
+    if (params?.offset !== undefined && params.offset !== null) {
+      searchParams.set('offset', String(params.offset));
     }
-    return apiRequest<AuditLog[]>(`/api/v1/audit/logs${query}`);
+    if (params?.session_id) {
+      searchParams.append('session_id', params.session_id);
+    }
+    if (params?.turn_id) {
+      searchParams.append('turn_id', params.turn_id);
+    }
+    return apiRequest<AuditLogsPageResponse>(`/api/v1/audit/logs?${searchParams}`);
   },
 };

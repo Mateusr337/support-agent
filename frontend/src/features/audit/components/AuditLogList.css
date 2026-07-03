@@ -91,6 +91,11 @@
   padding: 3rem;
 }
 
+.audit-log-loading-more {
+  text-align: center;
+  padding: 1rem !important;
+}
+
 .badge {
   display: inline-block;
   padding: 0.25rem 0.5rem;

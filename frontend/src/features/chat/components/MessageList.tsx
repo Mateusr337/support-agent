@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../../../types/chat";
 import Spinner from "../../../components/ui/Spinner";
 import "./MessageList.css";
@@ -37,6 +37,10 @@ interface MessageListProps {
   onLoadOlder?: () => void;
 }
 
+function scrollToBottom(el: HTMLElement): void {
+  el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
+}
+
 export default function MessageList({
   messages,
   sending,
@@ -45,11 +49,11 @@ export default function MessageList({
   onLoadOlder,
 }: MessageListProps) {
   const listRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const pendingScrollRestoreRef = useRef<ScrollRestoreState | null>(null);
   const initialScrollDoneRef = useRef(false);
   const previousLastMessageIdRef = useRef<string | null>(null);
   const wasLoadingOlderRef = useRef(false);
+  const [canLoadOlder, setCanLoadOlder] = useState(false);
 
   useLayoutEffect(() => {
     const list = listRef.current;
@@ -73,18 +77,25 @@ export default function MessageList({
     previousLastMessageIdRef.current = lastMessageId;
 
     if (!initialScrollDoneRef.current && messages.length > 0) {
-      list.scrollTop = list.scrollHeight;
+      scrollToBottom(list);
       initialScrollDoneRef.current = true;
+      requestAnimationFrame(() => {
+        const el = listRef.current;
+        if (el) {
+          scrollToBottom(el);
+        }
+        setCanLoadOlder(true);
+      });
       return;
     }
 
     if ((appendedAtBottom || sending) && !loadingOlder) {
-      list.scrollTop = list.scrollHeight;
+      scrollToBottom(list);
     }
   }, [messages, sending, loadingOlder]);
 
   useEffect(() => {
-    if (loadingOlder || !hasMoreOlder || !onLoadOlder) {
+    if (!canLoadOlder || loadingOlder || !hasMoreOlder || !onLoadOlder) {
       return;
     }
 
@@ -95,7 +106,12 @@ export default function MessageList({
 
     function handleScroll() {
       const el = listRef.current;
-      if (!el || el.scrollTop > 80 || loadingOlder || pendingScrollRestoreRef.current) {
+      if (
+        !el ||
+        el.scrollTop > 80 ||
+        loadingOlder ||
+        pendingScrollRestoreRef.current
+      ) {
         return;
       }
 
@@ -108,12 +124,12 @@ export default function MessageList({
 
     listEl.addEventListener("scroll", handleScroll, { passive: true });
     return () => listEl.removeEventListener("scroll", handleScroll);
-  }, [loadingOlder, hasMoreOlder, onLoadOlder]);
+  }, [canLoadOlder, loadingOlder, hasMoreOlder, onLoadOlder]);
 
   return (
     <div
       ref={listRef}
-      className="message-list"
+      className="message-list scrollable"
       role="log"
       aria-live="polite"
       aria-relevant="additions"
@@ -140,8 +156,6 @@ export default function MessageList({
           </div>
         </div>
       )}
-
-      <div ref={bottomRef} />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useAuditLogs } from '../hooks/useAuditLogs';
 import { AuditLog, GetAuditLogsParams } from '../../../types/api/audit';
@@ -8,8 +8,9 @@ import Spinner from '../../../components/ui/Spinner';
 import './AuditLogList.css';
 
 export default function AuditLogList() {
-  const { logs, loading, error, fetchLogs } = useAuditLogs();
+  const { logs, loading, loadingMore, hasMore, error, fetchLogs, loadMore } = useAuditLogs();
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const [filters, setFilters] = useState({
     session_id: '',
@@ -19,6 +20,43 @@ export default function AuditLogList() {
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
+
+  useEffect(() => {
+    if (loadingMore || !hasMore) {
+      return;
+    }
+
+    const wrapperEl = wrapperRef.current;
+    if (!wrapperEl) {
+      return;
+    }
+
+    function handleScroll() {
+      const el = wrapperRef.current;
+      if (!el || loadingMore) {
+        return;
+      }
+
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom < 80) {
+        void loadMore();
+      }
+    }
+
+    wrapperEl.addEventListener('scroll', handleScroll, { passive: true });
+    return () => wrapperEl.removeEventListener('scroll', handleScroll);
+  }, [loadingMore, hasMore, loadMore]);
+
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el || loading || loadingMore || !hasMore) {
+      return;
+    }
+
+    if (el.scrollHeight <= el.clientHeight) {
+      void loadMore();
+    }
+  }, [logs, loading, loadingMore, hasMore, loadMore]);
 
   const handleFilterChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -70,7 +108,7 @@ export default function AuditLogList() {
 
       {error && <div className="audit-log-error">{error}</div>}
 
-      <div className="audit-log-table-wrapper">
+      <div ref={wrapperRef} className="audit-log-table-wrapper scrollable">
         {loading ? (
           <div className="audit-log-loading">
             <Spinner />
@@ -134,6 +172,13 @@ export default function AuditLogList() {
                     )}
                   </Fragment>
                 ))
+              )}
+              {loadingMore && (
+                <tr>
+                  <td colSpan={7} className="audit-log-loading-more">
+                    <Spinner label="Loading more logs" />
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
