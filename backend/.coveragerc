@@ -1,0 +1,9 @@
+[run]
+source = app
+omit =
+    app/main.py
+    alembic/*
+
+[report]
+show_missing = True
+skip_covered = False

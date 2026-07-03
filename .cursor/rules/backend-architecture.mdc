@@ -47,7 +47,15 @@ backend/
 │
 ├── alembic/
 ├── tests/
+│   ├── conftest.py             # shared fixtures (client, db, auth helpers)
+│   ├── unit/                   # services, core — mocked dependencies
+│   │   ├── services/
+│   │   └── core/
+│   └── api/                    # HTTP tests via TestClient
 ├── requirements.txt
+├── requirements-dev.txt        # pytest, pytest-cov, httpx (local/CI only)
+├── pytest.ini
+├── .coveragerc
 └── Dockerfile
 ```
 
@@ -97,6 +105,26 @@ They implement a common interface — no prompts, tool calling, or business rule
 7. `models/` only defines ORM schema; queries live in repos
 8. Versioned routes — prefix `/api/v1/` via central router
 
+## Testing
+
+Stack: **pytest**, **pytest-cov**, **httpx** (via `requirements-dev.txt`). Dev deps are not installed in the production Docker image.
+
+| Type | Location | What to test |
+|------|----------|--------------|
+| Unit | `tests/unit/` | Services and core logic with mocked repos/clients |
+| API | `tests/api/` | Routes, status codes, and JSON via `TestClient` |
+| Integration (later) | `tests/integration/` | Real Postgres / Qdrant when needed |
+
+Run locally (SQLite in-memory — no Postgres required):
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest --cov=app --cov-report=term-missing
+```
+
+Use `app.dependency_overrides` in `conftest.py` to swap `get_db` and other FastAPI dependencies. Target: **≥ 90% coverage** on `app/`.
+
 ## Where to put new code
 
 - New HTTP feature → `api/v1/<feature>/routes.py` + register in `api/v1/router.py`
@@ -108,6 +136,8 @@ They implement a common interface — no prompts, tool calling, or business rule
 - Embedding adapter → `rag/embeddings/<vendor>.py`
 - Agent tool → `agents/tools/`
 - Ingestion/retrieval → `rag/`
+- Unit test → `tests/unit/<layer>/test_<module>.py`
+- API test → `tests/api/test_<feature>.py`
 
 ## Legacy (flat) code migration
 

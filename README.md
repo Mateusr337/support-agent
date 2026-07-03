@@ -37,11 +37,15 @@ Monorepo with a React frontend and a FastAPI backend, orchestrated via Docker Co
 
 ```
 support-agent/
-├── backend/          # FastAPI API
-├── frontend/         # React SPA
+├── backend/              # FastAPI API
+│   ├── app/
+│   ├── tests/            # pytest (unit + API)
+│   ├── requirements.txt
+│   └── requirements-dev.txt
+├── frontend/             # React SPA
 ├── docker-compose.yml
-├── .env.example      # Docker Compose env (copy to .env)
-└── .cursor/rules/    # Architecture conventions
+├── .env.example          # Docker Compose env (copy to .env)
+└── .cursor/rules/        # Architecture conventions
 ```
 
 Architecture details: `.cursor/rules/backend-architecture.mdc` and `.cursor/rules/frontend-architecture.mdc`.
@@ -88,7 +92,7 @@ docker compose up db qdrant
 cd backend
 cp .env.example .env
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -138,6 +142,23 @@ Root `.env` variables (required for Compose):
 
 Interactive docs: http://localhost:8000/docs
 
+## Backend tests
+
+Tests use **pytest**, **pytest-cov**, and **httpx** (`backend/requirements-dev.txt`). They run on the host, not inside the backend container (the Docker image installs only `requirements.txt`).
+
+Tests use an in-memory SQLite database (no Postgres required). Override `get_db` via `app.dependency_overrides` in `conftest.py`.
+
+```bash
+cd backend
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+pytest                              # run all tests
+pytest --cov=app --cov-report=term-missing   # with coverage %
+pytest --cov=app --cov-report=html           # HTML report → htmlcov/index.html
+```
+
+Layout mirrors the backend layers — see `.cursor/rules/backend-architecture.mdc` (Testing section).
+
 ## Current status
 
 Implemented:
@@ -145,12 +166,13 @@ Implemented:
 - Docker Compose with PostgreSQL, Qdrant, backend, and frontend
 - Health endpoints: `/api/v1/health`, `/api/v1/health/db`, `/api/v1/health/qdrant`
 - User model, Alembic migrations, register (`POST /api/v1/users`) and login (`POST /api/v1/auth/login`) with JWT
-- Frontend status dashboard wired to the API
+- Frontend auth (login / register) and chat UI shell
+- Backend test suite (`tests/`, `pytest.ini`, `conftest.py`) with pytest and coverage
 
 Not yet implemented:
 
-- Frontend auth (login / register UI)
-- Chat UI and conversation history
+- Chat backend (conversation history, RAG responses)
 - RAG pipeline (document ingestion, chunking, retrieval)
 - LLM integration
-- Unit tests and load/quality benchmarks
+- Load tests and quality benchmarks
+  

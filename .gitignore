@@ -6,3 +6,6 @@ __pycache__
 dist
 postgres_data
 .vscode
+.pytest_cache
+.coverage
+htmlcov
