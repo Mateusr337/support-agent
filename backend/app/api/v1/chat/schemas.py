@@ -1,0 +1,14 @@
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+
+
+class ChatSessionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+    finalized_at: datetime | None

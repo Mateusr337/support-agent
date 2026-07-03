@@ -1,18 +1,13 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
-from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.api.v1.dependencies import get_user_service
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.services.user_service import UserService
 
 bearer_scheme = HTTPBearer(auto_error=False)
-
-
-def get_user_service(db: Session = Depends(get_db)) -> UserService:
-    return UserService(db)
 
 
 def get_current_user(

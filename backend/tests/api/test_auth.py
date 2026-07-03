@@ -44,6 +44,27 @@ def test_login_unknown_email_returns_401(client):
     assert response.json()["detail"] == "Invalid email or password"
 
 
+def test_login_invalid_email_returns_422(client):
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "not-an-email",
+            "password": "password123",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_login_missing_password_returns_422(client):
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user@example.com"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_me_success(client, auth_headers, registered_user):
     response = client.get("/api/v1/auth/me", headers=auth_headers)
 

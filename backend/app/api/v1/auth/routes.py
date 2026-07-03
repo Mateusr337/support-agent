@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.v1.auth.dependencies import get_current_user, get_user_service
+from app.api.v1.auth.dependencies import get_current_user
 from app.api.v1.auth.schemas import LoginRequest, LoginResponse
+from app.api.v1.dependencies import get_user_service
+from app.api.v1.responses import (
+    merge_responses,
+    UNAUTHORIZED_RESPONSE,
+    VALIDATION_ERROR_RESPONSE,
+)
 from app.api.v1.users.schemas import UserResponse
 from app.core.security import create_access_token
 from app.models.user import User
@@ -14,11 +20,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     "/login",
     status_code=status.HTTP_200_OK,
     response_model=LoginResponse,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Invalid email or password",
-        },
-    },
+    responses=merge_responses(
+        UNAUTHORIZED_RESPONSE,
+        VALIDATION_ERROR_RESPONSE,
+    ),
 )
 def login(
     body: LoginRequest,
@@ -42,12 +47,9 @@ def login(
 
 @router.get(
     "/me",
+    status_code=status.HTTP_200_OK,
     response_model=UserResponse,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Missing, invalid, or expired token",
-        },
-    },
+    responses=UNAUTHORIZED_RESPONSE,
 )
 def get_me(current_user: User = Depends(get_current_user)) -> UserResponse:
     return UserResponse.model_validate(current_user)

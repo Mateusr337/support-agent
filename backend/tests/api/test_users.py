@@ -56,3 +56,22 @@ def test_register_short_password_returns_422(client):
     )
 
     assert response.status_code == 422
+
+
+def test_register_empty_name_returns_422(client):
+    response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "empty-name@example.com",
+            "name": "",
+            "password": "password123",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_register_missing_fields_returns_422(client):
+    response = client.post("/api/v1/users", json={"email": "missing@example.com"})
+
+    assert response.status_code == 422

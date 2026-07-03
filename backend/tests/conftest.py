@@ -14,7 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.main import app
-from app.models import User  # noqa: F401
+from app.models import ChatMessage, ChatSession, User  # noqa: F401
 
 
 @pytest.fixture()
