@@ -32,3 +32,8 @@ class ChatMessageResponse(BaseModel):
 class SendMessageResponse(BaseModel):
     user_message: ChatMessageResponse
     assistant_message: ChatMessageResponse
+
+
+class ChatMessagesPageResponse(BaseModel):
+    items: list[ChatMessageResponse]
+    has_more: bool

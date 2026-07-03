@@ -13,13 +13,29 @@ class ChatMessageRepository:
     def get_by_id(self, message_id: int) -> ChatMessage | None:
         return self._db.get(ChatMessage, message_id)
 
-    def list_by_session_id(self, session_id: UUID) -> list[ChatMessage]:
-        stmt = (
-            select(ChatMessage)
-            .where(ChatMessage.chat_session_id == session_id)
-            .order_by(ChatMessage.created_at.asc())
-        )
-        return list(self._db.execute(stmt).scalars().all())
+    def list_by_session_id(
+        self,
+        session_id: UUID,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> tuple[list[ChatMessage], bool]:
+        if limit is None:
+            stmt = (
+                select(ChatMessage)
+                .where(ChatMessage.chat_session_id == session_id)
+                .order_by(ChatMessage.created_at.asc())
+            )
+            return list(self._db.execute(stmt).scalars().all()), False
+
+        stmt = select(ChatMessage).where(ChatMessage.chat_session_id == session_id)
+        if offset is not None:
+            stmt = stmt.where(ChatMessage.id < offset)
+        stmt = stmt.order_by(ChatMessage.id.desc()).limit(limit + 1)
+        rows = list(self._db.execute(stmt).scalars().all())
+        has_more = len(rows) > limit
+        page = rows[:limit]
+        page.reverse()
+        return page, has_more
 
     def list_by_user_id(self, user_id: int) -> list[ChatMessage]:
         stmt = (

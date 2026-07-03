@@ -200,3 +200,105 @@ def test_send_message_without_auth_returns_401(client):
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Not authenticated"
+
+
+def _seed_messages(client, auth_headers, session_id, count):
+    for index in range(count):
+        response = client.post(
+            f"/api/v1/chat/conversations/{session_id}/messages",
+            headers=auth_headers,
+            json={"content": f"Message {index + 1}"},
+        )
+        assert response.status_code == 201
+
+
+def test_list_messages_returns_latest_page(client, auth_headers):
+    create_response = client.post("/api/v1/chat/conversations", headers=auth_headers)
+    assert create_response.status_code == 201
+    session_id = create_response.json()["id"]
+    _seed_messages(client, auth_headers, session_id, 5)
+
+    response = client.get(
+        f"/api/v1/chat/conversations/{session_id}/messages",
+        headers=auth_headers,
+        params={"limit": 10},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_more"] is False
+    assert len(data["items"]) == 10
+    assert data["items"][0]["content"] == "Message 1"
+    assert data["items"][-1]["role"] == "assistant"
+    assert data["items"][-1]["content"] == (
+        "Thanks for your message. A support agent will help you shortly."
+    )
+
+
+def test_list_messages_paginates_older_messages(client, auth_headers):
+    create_response = client.post("/api/v1/chat/conversations", headers=auth_headers)
+    assert create_response.status_code == 201
+    session_id = create_response.json()["id"]
+    _seed_messages(client, auth_headers, session_id, 8)
+
+    first_page = client.get(
+        f"/api/v1/chat/conversations/{session_id}/messages",
+        headers=auth_headers,
+        params={"limit": 10},
+    )
+    assert first_page.status_code == 200
+    first_data = first_page.json()
+    assert first_data["has_more"] is True
+    assert len(first_data["items"]) == 10
+    assert first_data["items"][0]["content"] == "Message 4"
+    assert first_data["items"][-1]["content"] == (
+        "Thanks for your message. A support agent will help you shortly."
+    )
+
+    offset = first_data["items"][0]["id"]
+    second_page = client.get(
+        f"/api/v1/chat/conversations/{session_id}/messages",
+        headers=auth_headers,
+        params={"limit": 10, "offset": offset},
+    )
+    assert second_page.status_code == 200
+    second_data = second_page.json()
+    assert second_data["has_more"] is False
+    assert len(second_data["items"]) == 6
+    assert second_data["items"][0]["content"] == "Message 1"
+    assert second_data["items"][-2]["content"] == "Message 3"
+
+
+def test_list_messages_empty_session(client, auth_headers):
+    create_response = client.post("/api/v1/chat/conversations", headers=auth_headers)
+    assert create_response.status_code == 201
+    session_id = create_response.json()["id"]
+
+    response = client.get(
+        f"/api/v1/chat/conversations/{session_id}/messages",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"] == []
+    assert data["has_more"] is False
+
+
+def test_list_messages_session_not_found_returns_404(client, auth_headers):
+    response = client.get(
+        "/api/v1/chat/conversations/00000000-0000-0000-0000-000000000000/messages",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Chat session not found"
+
+
+def test_list_messages_without_auth_returns_401(client):
+    response = client.get(
+        "/api/v1/chat/conversations/00000000-0000-0000-0000-000000000000/messages",
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"

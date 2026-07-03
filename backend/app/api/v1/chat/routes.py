@@ -1,9 +1,11 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.v1.auth.dependencies import get_current_user
 from app.api.v1.chat.schemas import (
+    ChatMessagesPageResponse,
+    ChatMessageResponse,
     ChatSessionResponse,
     SendMessageRequest,
     SendMessageResponse,
@@ -52,6 +54,38 @@ def get_or_create_active_conversation(
 ) -> ChatSessionResponse:
     session = service.get_or_create_active_session(user_id=current_user.id)
     return ChatSessionResponse.model_validate(session)
+
+
+@router.get(
+    "/{session_id}/messages",
+    status_code=status.HTTP_200_OK,
+    response_model=ChatMessagesPageResponse,
+    responses=merge_responses(UNAUTHORIZED_RESPONSE, NOT_FOUND_RESPONSE),
+)
+def list_messages(
+    session_id: UUID,
+    limit: int = Query(default=10, ge=1, le=50),
+    offset: int | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    service: ChatService = Depends(get_chat_service),
+) -> ChatMessagesPageResponse:
+    try:
+        messages, has_more = service.list_session_messages(
+            session_id=session_id,
+            user_id=current_user.id,
+            limit=limit,
+            offset=offset,
+        )
+    except ChatSessionNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return ChatMessagesPageResponse(
+        items=[ChatMessageResponse.model_validate(message) for message in messages],
+        has_more=has_more,
+    )
 
 
 @router.post(

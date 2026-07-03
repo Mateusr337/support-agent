@@ -56,6 +56,23 @@ class ChatService:
             self._db.rollback()
             raise
 
+    def list_session_messages(
+        self,
+        session_id: UUID,
+        user_id: int,
+        limit: int = 10,
+        offset: int | None = None,
+    ) -> tuple[list[ChatMessage], bool]:
+        session = self._session_repository.get_by_id_and_user_id(session_id, user_id)
+        if session is None:
+            raise ChatSessionNotFoundError("Chat session not found")
+
+        return self._message_repository.list_by_session_id(
+            session_id=session_id,
+            limit=limit,
+            offset=offset,
+        )
+
     def process_message(
         self,
         session_id: UUID,
