@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
+    llm_provider: str = "openai"
+    llm_model: str = "gpt-4o-mini"
+    openai_api_key: str | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:
