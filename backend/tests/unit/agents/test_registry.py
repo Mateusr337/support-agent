@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -11,7 +11,9 @@ def test_agents_catalog_contains_support():
     assert AGENTS["support"].name == "support"
 
 
-def test_build_agent_returns_support_agent():
+@patch("app.agents.registry.get_rag_service")
+def test_build_agent_returns_support_agent(mock_get_rag_service):
+    mock_get_rag_service.return_value = MagicMock()
     agent = build_agent("support", MagicMock())
 
     assert isinstance(agent, SupportAgent)

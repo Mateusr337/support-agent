@@ -48,5 +48,5 @@ class AuditLogRepository:
             stmt = stmt.where(AuditLog.user_id == user_id)
         if turn_id is not None:
             stmt = stmt.where(AuditLog.turn_id == turn_id)
-        stmt = stmt.order_by(AuditLog.created_at.asc())
+        stmt = stmt.order_by(AuditLog.created_at.desc())
         return list(self._db.execute(stmt).scalars().all())

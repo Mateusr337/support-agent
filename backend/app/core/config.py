@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     embedding_provider: str = "openai"
     embedding_model: str = "text-embedding-3-small"
     qdrant_collection: str = "support_documents"
+    documents_dir: str = ""
+
+    @property
+    def resolved_documents_dir(self) -> Path:
+        if self.documents_dir.strip():
+            return Path(self.documents_dir)
+        return BASE_DIR.parent / "documents"
 
     @property
     def cors_origin_list(self) -> list[str]:

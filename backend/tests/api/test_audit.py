@@ -44,8 +44,8 @@ def test_list_audit_logs_success(client: TestClient, db_session, auth_headers, r
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
-    assert data[0]["message"] == "Test log 1"
-    assert data[1]["message"] == "Test log 2"
+    assert data[0]["message"] == "Test log 2"
+    assert data[1]["message"] == "Test log 1"
 
 
 def test_list_audit_logs_without_auth_returns_401(client: TestClient):

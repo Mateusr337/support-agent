@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from app.agents.prompts import SYSTEM_PROMPT
@@ -129,7 +129,9 @@ def test_search_documents_tool_logs_rag_call():
     assert call_kwargs["data"]["query"] == "reset printer"
 
 
-def test_build_agent_returns_support_agent_with_config():
+@patch("app.agents.registry.get_rag_service")
+def test_build_agent_returns_support_agent_with_config(mock_get_rag_service):
+    mock_get_rag_service.return_value = MagicMock()
     llm = MagicMock()
     agent = build_agent("support", llm)
 

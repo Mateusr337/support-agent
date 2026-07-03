@@ -2,7 +2,7 @@ from app.agents.base import AgentConfig, ToolBinding
 from app.agents.prompts import SYSTEM_PROMPT
 from app.agents.support_agent import SupportAgent
 from app.core.llm.base import LLMProvider
-from app.rag.retriever import NoOpRetriever
+from app.rag.service import get_rag_service
 from app.tools.registry import ToolDeps, build_tool_set
 
 
@@ -27,6 +27,6 @@ def build_agent(name: str, llm: LLMProvider) -> SupportAgent:
 
     tools = build_tool_set(
         config.tool_names,
-        ToolDeps(searcher=NoOpRetriever()),
+        ToolDeps(searcher=get_rag_service()),
     )
     return SupportAgent(llm=llm, config=config, tools=tools)

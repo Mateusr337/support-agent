@@ -43,8 +43,10 @@ services:
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-support_documents}
+      DOCUMENTS_DIR: ${DOCUMENTS_DIR:-/app/documents}
     volumes:
       - ./backend/app:/app/app
+      - ./documents:/app/documents:ro
     depends_on:
       db:
         condition: service_healthy

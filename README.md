@@ -37,12 +37,8 @@ Monorepo with a React frontend and a FastAPI backend, orchestrated via Docker Co
 
 ```
 support-agent/
+├── documents/          # HP PDF corpus (indexed manually via ingest CLI)
 ├── backend/              # FastAPI API
-│   ├── app/
-│   ├── alembic/          # DB migrations
-│   ├── tests/            # pytest (unit + API)
-│   ├── requirements.txt
-│   └── requirements-dev.txt
 ├── frontend/             # React SPA (TypeScript)
 ├── docker-compose.yml
 ├── .env.example          # Docker Compose env (copy to .env)
@@ -50,6 +46,32 @@ support-agent/
 ```
 
 Architecture details: `.cursor/rules/backend-architecture.mdc` and `.cursor/rules/frontend-architecture.mdc`.
+
+## RAG and document corpus
+
+HP PDFs live in **`documents/`** at the repo root. They are **not** baked into the Docker image and are **not** indexed on container startup.
+
+| Concern | Location / mechanism |
+| ------- | -------------------- |
+| PDF files | `documents/*.pdf` |
+| Ingest CLI (planned) | `backend/app/scripts/ingest_documents.py` |
+| Ingest + search logic (planned) | `backend/app/rag/service.py` |
+| Vector storage | Qdrant collection (`QDRANT_COLLECTION`) |
+| Chat retrieval | `tools/search_documents` → `RagService.search()` (agent never reads `documents/`) |
+
+After adding PDFs, index manually:
+
+```bash
+# Local backend
+cd backend
+source .venv/bin/activate
+python -m app.scripts.ingest_documents
+
+# Or with the backend container running
+docker compose exec backend python -m app.scripts.ingest_documents
+```
+
+Docker mounts `./documents` read-only at `/app/documents` inside the backend container (`DOCUMENTS_DIR`).
 
 ## Prerequisites
 
@@ -139,6 +161,7 @@ Root `.env` variables (required for Compose):
 | `LLM_PROVIDER`       | LLM vendor (default: `openai`)                   |
 | `LLM_MODEL`          | Model name (default: `gpt-4o-mini`)              |
 | `OPENAI_API_KEY`     | OpenAI API key (required when provider is openai) |
+| `DOCUMENTS_DIR`      | Folder with HP PDFs (Compose default: `/app/documents`) |
 | `VITE_API_URL`       | Backend URL exposed to the browser               |
 
 `backend/.env` uses the same JWT and LLM variables. When using Compose for `db` and `qdrant` only, set `DATABASE_URL` to port **5400** (see `backend/.env.example`).
@@ -219,6 +242,8 @@ Implemented:
 
 Not yet implemented:
 
-- RAG pipeline (document ingestion, chunking, retrieval into Qdrant)
-- HP document corpus and indexing
+- RAG pipeline (`rag/service.py`, `vector_repository.py`, ingest CLI implementation)
+- HP document indexing into Qdrant
 - Load tests and quality benchmarks
+
+Architecture declared: `documents/` folder, `DOCUMENTS_DIR`, Docker volume mount, manual ingest workflow (see `.cursor/rules/backend-architecture.mdc`).
