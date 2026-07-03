@@ -21,6 +21,12 @@ NOT_FOUND_RESPONSE = {
     },
 }
 
+BAD_REQUEST_RESPONSE = {
+    status.HTTP_400_BAD_REQUEST: {
+        "description": "Invalid request",
+    },
+}
+
 CONFLICT_RESPONSE = {
     status.HTTP_409_CONFLICT: {
         "description": "Resource conflict",

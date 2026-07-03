@@ -1,13 +1,36 @@
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from uuid import UUID
+
 from sqlalchemy.orm import Session
 
+from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession
+from app.repositories.chat_message_repository import ChatMessageRepository
 from app.repositories.chat_session_repository import ChatSessionRepository
+
+STUB_REPLY = "Thanks for your message. A support agent will help you shortly."
+
+
+class ChatSessionNotFoundError(Exception):
+    pass
+
+
+class ChatSessionFinalizedError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class ProcessMessageResult:
+    user_message: ChatMessage
+    assistant_message: ChatMessage
 
 
 class ChatService:
     def __init__(self, db: Session) -> None:
         self._db = db
         self._session_repository = ChatSessionRepository(db)
+        self._message_repository = ChatMessageRepository(db)
 
     def create_session(self, user_id: int) -> ChatSession:
         try:
@@ -32,3 +55,45 @@ class ChatService:
         except Exception:
             self._db.rollback()
             raise
+
+    def process_message(
+        self,
+        session_id: UUID,
+        user_id: int,
+        content: str,
+    ) -> ProcessMessageResult:
+        session = self._session_repository.get_by_id_and_user_id(session_id, user_id)
+        if session is None:
+            raise ChatSessionNotFoundError("Chat session not found")
+
+        if session.finalized_at is not None:
+            raise ChatSessionFinalizedError("Chat session is finalized")
+
+        try:
+            session.updated_at = datetime.now(UTC)
+
+            user_message = self._message_repository.create(
+                chat_session_id=session_id,
+                user_id=user_id,
+                role="user",
+                content=content,
+            )
+            assistant_message = self._message_repository.create(
+                chat_session_id=session_id,
+                user_id=user_id,
+                role="assistant",
+                content=self._generate_reply(content),
+            )
+            self._db.commit()
+            self._db.refresh(user_message)
+            self._db.refresh(assistant_message)
+            return ProcessMessageResult(
+                user_message=user_message,
+                assistant_message=assistant_message,
+            )
+        except Exception:
+            self._db.rollback()
+            raise
+
+    def _generate_reply(self, content: str) -> str:
+        return STUB_REPLY
