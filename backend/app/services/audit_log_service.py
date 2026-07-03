@@ -71,6 +71,19 @@ class AuditLogService:
             data=data,
         )
 
+    def list(
+        self,
+        *,
+        session_id: UUID | None = None,
+        user_id: int | None = None,
+        turn_id: UUID | None = None,
+    ) -> list[AuditLog]:
+        return self._repository.list(
+            session_id=session_id,
+            user_id=user_id,
+            turn_id=turn_id,
+        )
+
     def _create(
         self,
         *,

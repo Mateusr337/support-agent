@@ -5,8 +5,11 @@ os.environ["QDRANT_URL"] = "http://localhost:6335"
 os.environ["CORS_ORIGINS"] = "http://localhost:5173"
 os.environ["JWT_SECRET"] = "test-secret-key-for-pytest"
 os.environ["JWT_EXPIRE_MINUTES"] = "60"
+os.environ["OPENAI_API_KEY"] = ""
+os.environ["LLM_PROVIDER"] = "openai"
 
 import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -23,6 +26,16 @@ FAKE_AGENT_REPLY = "Thanks for your message. A support agent will help you short
 class FakeSupportAgent:
     async def reply(self, user_message: str, history=None, **kwargs) -> str:
         return FAKE_AGENT_REPLY
+
+
+@pytest.fixture(autouse=True)
+def block_real_openai_api_calls():
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(
+        side_effect=RuntimeError("OpenAI API must not be called in tests")
+    )
+    with patch("app.core.llm.openai.AsyncOpenAI", return_value=mock_client):
+        yield
 
 
 @pytest.fixture()
