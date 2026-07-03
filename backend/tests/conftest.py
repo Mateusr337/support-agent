@@ -12,9 +12,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.v1.dependencies import get_support_agent
 from app.core.database import Base, get_db
 from app.main import app
 from app.models import ChatMessage, ChatSession, User  # noqa: F401
+
+FAKE_AGENT_REPLY = "Thanks for your message. A support agent will help you shortly."
+
+
+class FakeSupportAgent:
+    async def reply(self, user_message: str, history=None, **kwargs) -> str:
+        return FAKE_AGENT_REPLY
 
 
 @pytest.fixture()
@@ -53,6 +61,7 @@ def client(db_session):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_support_agent] = lambda: FakeSupportAgent()
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

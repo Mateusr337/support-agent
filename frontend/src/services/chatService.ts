@@ -7,7 +7,7 @@ import type {
 import type { ChatMessage, SendMessageResult } from "../types/chat";
 import { apiRequest } from "./api";
 
-export const PAGE_SIZE = 10;
+export const PAGE_SIZE = 20;
 
 function mapMessage(apiMessage: ChatMessageResponse): ChatMessage {
   return {
@@ -30,7 +30,7 @@ export const chatService = {
 
   async getSessionMessages(
     sessionId: string,
-    { limit = PAGE_SIZE, offset }: GetSessionMessagesOptions = {}
+    { limit = PAGE_SIZE, offset }: GetSessionMessagesOptions = {},
   ): Promise<ChatMessagesPageResponse> {
     const params = new URLSearchParams({ limit: String(limit) });
     if (offset !== undefined && offset !== null) {
@@ -38,17 +38,20 @@ export const chatService = {
     }
 
     return apiRequest<ChatMessagesPageResponse>(
-      `/api/v1/chat/conversations/${sessionId}/messages?${params}`
+      `/api/v1/chat/conversations/${sessionId}/messages?${params}`,
     );
   },
 
-  async sendMessage(sessionId: string, content: string): Promise<SendMessageResult> {
+  async sendMessage(
+    sessionId: string,
+    content: string,
+  ): Promise<SendMessageResult> {
     const result = await apiRequest<SendMessageApiResponse>(
       `/api/v1/chat/conversations/${sessionId}/messages`,
       {
         method: "POST",
         body: { content },
-      }
+      },
     );
 
     return {
@@ -56,8 +59,6 @@ export const chatService = {
       assistant_message: mapMessage(result.assistant_message),
     };
   },
-
-  mapMessage,
 
   mapMessages(apiMessages: ChatMessageResponse[]): ChatMessage[] {
     return apiMessages.map(mapMessage);

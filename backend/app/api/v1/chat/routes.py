@@ -99,14 +99,14 @@ def list_messages(
         VALIDATION_ERROR_RESPONSE,
     ),
 )
-def send_message(
+async def send_message(
     session_id: UUID,
     body: SendMessageRequest,
     current_user: User = Depends(get_current_user),
     service: ChatService = Depends(get_chat_service),
 ) -> SendMessageResponse:
     try:
-        result = service.process_message(
+        result = await service.process_message(
             session_id=session_id,
             user_id=current_user.id,
             content=body.content,

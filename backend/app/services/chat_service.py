@@ -4,12 +4,12 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.agents.support_agent import SupportAgent
+from app.core.llm.base import Message
 from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession
 from app.repositories.chat_message_repository import ChatMessageRepository
 from app.repositories.chat_session_repository import ChatSessionRepository
-
-STUB_REPLY = "Thanks for your message. A support agent will help you shortly."
 
 
 class ChatSessionNotFoundError(Exception):
@@ -27,8 +27,9 @@ class ProcessMessageResult:
 
 
 class ChatService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, agent: SupportAgent) -> None:
         self._db = db
+        self._agent = agent
         self._session_repository = ChatSessionRepository(db)
         self._message_repository = ChatMessageRepository(db)
 
@@ -73,7 +74,7 @@ class ChatService:
             offset=offset,
         )
 
-    def process_message(
+    async def process_message(
         self,
         session_id: UUID,
         user_id: int,
@@ -89,17 +90,21 @@ class ChatService:
         try:
             session.updated_at = datetime.now(UTC)
 
+            prior_messages, _ = self._message_repository.list_by_session_id(session_id)
+            history = self._to_llm_history(prior_messages)
+
             user_message = self._message_repository.create(
                 chat_session_id=session_id,
                 user_id=user_id,
                 role="user",
                 content=content,
             )
+            reply = await self._agent.reply(content, history=history)
             assistant_message = self._message_repository.create(
                 chat_session_id=session_id,
                 user_id=user_id,
                 role="assistant",
-                content=self._generate_reply(content),
+                content=reply,
             )
             self._db.commit()
             self._db.refresh(user_message)
@@ -112,5 +117,9 @@ class ChatService:
             self._db.rollback()
             raise
 
-    def _generate_reply(self, content: str) -> str:
-        return STUB_REPLY
+    def _to_llm_history(self, messages: list[ChatMessage]) -> list[Message]:
+        return [
+            Message(role=message.role, content=message.content)
+            for message in messages
+            if message.role in ("user", "assistant")
+        ]
