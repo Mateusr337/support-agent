@@ -1,5 +1,5 @@
 import Spinner from "../../../components/ui/Spinner";
-import ChatHeader from "./ChatHeader";
+import AppHeader from "../../../components/layout/AppHeader";
 import MessageInput from "./MessageInput";
 import MessageList from "./MessageList";
 import { useChat } from "../hooks/useChat";
@@ -21,7 +21,7 @@ export default function ChatWindow() {
   if (loading) {
     return (
       <div className="chat-window">
-        <ChatHeader />
+        <AppHeader />
         <Spinner fullPage label="Starting chat session..." />
       </div>
     );
@@ -29,7 +29,7 @@ export default function ChatWindow() {
 
   return (
     <div className="chat-window">
-      <ChatHeader />
+      <AppHeader />
       {error && (
         <div className="chat-error" role="alert">
           {error}

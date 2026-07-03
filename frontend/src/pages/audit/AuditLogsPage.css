@@ -1,0 +1,11 @@
+.audit-logs-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.audit-logs-page-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}

@@ -20,6 +20,10 @@
   --radius-full: 999px;
   --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.35);
   --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --scrollbar-size: 8px;
+  --scrollbar-track: var(--color-bg);
+  --scrollbar-thumb: var(--color-border);
+  --scrollbar-thumb-hover: var(--color-surface-hover);
 }
 
 * {
@@ -52,4 +56,38 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+*,
+.scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar,
+.scrollable::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+*::-webkit-scrollbar-track,
+.scrollable::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb,
+.scrollable::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb:hover,
+.scrollable::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner,
+.scrollable::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
 }
