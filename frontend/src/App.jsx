@@ -14,17 +14,17 @@ export default function App() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    fetch(`${API_URL}/health`)
+    fetch(`${API_URL}/api/v1/health`)
       .then((res) => res.json())
       .then(() => setApiStatus("ok"))
       .catch(() => setApiStatus("error"));
 
-    fetch(`${API_URL}/health/db`)
+    fetch(`${API_URL}/api/v1/health/db`)
       .then((res) => res.json())
       .then(() => setDbStatus("ok"))
       .catch(() => setDbStatus("error"));
 
-    fetch(`${API_URL}/api/hello`)
+    fetch(`${API_URL}/api/v1/hello`)
       .then((res) => res.json())
       .then((data) => setMessage(data.message))
       .catch(() => setMessage("Failed to reach API"));

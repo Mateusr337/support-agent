@@ -1,0 +1,105 @@
+---
+description: React frontend folder structure and layer architecture
+globs: frontend/**/*
+alwaysApply: false
+---
+
+# Frontend Architecture
+
+Stack: React 19, Vite, React Router.
+
+Pattern: **Pages + Features + Services** (mirrors backend feature folders with a thin HTTP layer).
+
+## Folder structure
+
+```
+frontend/
+├── src/
+│   ├── main.jsx                    # entry point
+│   ├── App.jsx                     # root layout + router outlet
+│   │
+│   ├── app/                        # bootstrap (no UI)
+│   │   ├── router.jsx              # route definitions
+│   │   └── providers.jsx           # context providers (auth, theme, etc.)
+│   │
+│   ├── pages/                      # route-level screens — thin, compose features
+│   │   ├── login/
+│   │   │   └── LoginPage.jsx
+│   │   ├── register/
+│   │   │   └── RegisterPage.jsx
+│   │   └── chat/
+│   │       └── ChatPage.jsx
+│   │
+│   ├── features/                   # domain UI + hooks grouped by feature
+│   │   ├── auth/
+│   │   │   ├── components/         # LoginForm, RegisterForm, etc.
+│   │   │   └── hooks/              # useAuth, useLogin, etc.
+│   │   └── chat/
+│   │       ├── components/         # ChatWindow, MessageList, MessageInput
+│   │       └── hooks/              # useChat, useMessages, etc.
+│   │
+│   ├── components/                 # shared UI not tied to one feature
+│   │   └── ui/                     # Button, Input, Spinner, etc.
+│   │
+│   ├── services/                   # HTTP / API layer (calls backend)
+│   │   ├── api.js                  # base client (fetch, auth headers, errors)
+│   │   ├── authService.js
+│   │   └── chatService.js
+│   │
+│   ├── hooks/                      # shared hooks (cross-feature)
+│   ├── lib/                        # utilities (env, formatters, constants)
+│   │   └── env.js
+│   └── styles/                     # global / shared CSS modules
+│
+├── index.html
+├── vite.config.js
+└── package.json
+```
+
+## Layer responsibilities
+
+| Layer | Responsibility | Depends on |
+|-------|----------------|------------|
+| `app/router.jsx` | Route map, lazy loading, protected routes | `pages/` |
+| `app/providers.jsx` | Wraps app with AuthProvider and other contexts | `features/*/hooks` |
+| `pages/` | One screen per route; wires feature components together | `features/`, `components/` |
+| `features/<domain>/` | Domain-specific UI, local state, feature hooks | `services/`, `components/ui` |
+| `components/ui/` | Reusable presentational components | nothing domain-specific |
+| `services/` | API calls to backend (`/api/v1/...`); no React | `lib/env` |
+| `hooks/` | Shared hooks used by multiple features | varies |
+| `lib/` | Pure utilities, env validation | env vars |
+
+## Request flow
+
+```
+Page → feature component/hook → service → backend API
+                ↘ components/ui (presentational)
+```
+
+## Routes (initial)
+
+| Path | Page | Access |
+|------|------|--------|
+| `/login` | `LoginPage` | public |
+| `/register` | `RegisterPage` | public |
+| `/chat` | `ChatPage` | authenticated |
+| `/` | redirect to `/chat` or `/login` | — |
+
+## Design rules
+
+1. **Thin pages** — pages compose features; no fetch logic or heavy state in `pages/`
+2. **Feature colocation** — auth UI/hooks live under `features/auth/`, chat under `features/chat/`
+3. **Services own HTTP** — all `fetch` calls go through `services/`; components and hooks call services
+4. **Shared UI only in `components/ui/`** — feature-specific markup stays in `features/<domain>/components/`
+5. **Env in one place** — read `import.meta.env` only in `lib/env.js`
+6. **No business rules in services** — services map request/response; validation and orchestration live in hooks or backend
+
+## Where to put new code
+
+- New route/screen → `pages/<name>/<Name>Page.jsx` + register in `app/router.jsx`
+- Auth UI or hook → `features/auth/`
+- Chat UI or hook → `features/chat/`
+- Reusable button/input/layout → `components/ui/`
+- New API integration → `services/<domain>Service.js`
+- Shared hook → `hooks/`
+- Utility / constant → `lib/`

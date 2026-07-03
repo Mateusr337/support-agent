@@ -1,0 +1,16 @@
+---
+description: All project content must be written in English
+alwaysApply: true
+---
+
+# English Only
+
+All content inside this project must be written in English:
+
+- Documentation (README, rules, comments in config files)
+- Code comments and docstrings
+- Commit messages and PR descriptions
+- User-facing error messages and logs
+- Variable names, function names, and identifiers (already expected in English)
+
+Do not add Portuguese or other non-English text to the codebase.

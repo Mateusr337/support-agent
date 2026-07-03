@@ -1,0 +1,120 @@
+---
+description: FastAPI backend folder structure and layer architecture
+globs: backend/**/*
+alwaysApply: false
+---
+
+# Backend Architecture
+
+Stack: FastAPI, SQLAlchemy, PostgreSQL, Qdrant.
+
+Pattern: **Service + Repository** (similar to NestJS/Express with an isolated data layer).
+
+## Folder structure
+
+```
+backend/
+├── app/
+│   ├── main.py                 # FastAPI app, middleware, router registration
+│   │
+│   ├── core/                   # Infrastructure (no business rules)
+│   │   ├── config.py
+│   │   ├── database.py         # engine, SessionLocal, get_db
+│   │   ├── qdrant.py           # Qdrant client
+│   │   └── llm/                # LLM adapters (chat/completion)
+│   │       ├── base.py         # common protocol/interface
+│   │       ├── openai.py
+│   │       ├── anthropic.py
+│   │       └── factory.py      # get_llm_provider() via config
+│   │
+│   ├── api/                    # HTTP — feature folders + central router
+│   │   └── v1/
+│   │       ├── router.py       # aggregates routers from each feature
+│   │       ├── health/
+│   │       │   └── routes.py
+│   │       └── chat/
+│   │           ├── routes.py
+│   │           └── schemas.py  # DTOs colocated with the feature
+│   │
+│   ├── models/                 # SQLAlchemy ORM (table definitions only)
+│   ├── repositories/           # Data access (Postgres, Qdrant)
+│   ├── services/               # Business logic; instantiates repos in __init__
+│   ├── agents/                 # Agent orchestration, prompts, and tools
+│   └── rag/
+│       ├── embeddings/         # embedding adapters (OpenAI, etc.)
+│       ├── ingest.py
+│       └── retriever.py
+│
+├── alembic/
+├── tests/
+├── requirements.txt
+└── Dockerfile
+```
+
+## Layer responsibilities
+
+| Layer | Responsibility | Depends on |
+|-------|----------------|------------|
+| `api/v1/router.py` | Aggregates routers from each feature; mounted in `main.py` with prefix `/api/v1` | feature `routes.py` |
+| `api/v1/<feature>/` | Feature routes + schemas | `services` |
+| `models/` | ORM table/relationship definitions | `core/database` |
+| `repositories/` | Queries and persistence (Postgres, Qdrant) | `models`, `core/` |
+| `services/` | Business rules, transactions, orchestration | `repositories`, `agents`, `rag` |
+| `agents/` | Prompts, tool calling, agent loop | `core/llm`, `repositories`, `rag` |
+| `rag/` | Ingestion, retrieval, and vector search | `rag/embeddings`, `repositories` |
+| `core/llm/` | LLM adapters (OpenAI, Anthropic, Ollama…) | env vars |
+| `rag/embeddings/` | Embedding adapters (may use a different vendor than the LLM) | env vars |
+| `core/` | Config, DB, Qdrant | env vars |
+
+## Request flow
+
+```
+Client → api/ (route + DTO) → services/ → repositories/ → PostgreSQL / Qdrant
+                                ↘ agents/ → core/llm/ (chat)
+                                         ↘ rag/ → embeddings/ + Qdrant
+```
+
+## LLM providers
+
+Vendor adapters live in `core/llm/` (chat) and `rag/embeddings/` (vectors).
+They implement a common interface — no prompts, tool calling, or business rules.
+
+| Type | Location |
+|------|----------|
+| LLM chat | `core/llm/` |
+| Embeddings | `rag/embeddings/` |
+
+`get_db` lives in `core/database.py`. Services instantiate repos — routes only pass the session.
+
+## Design rules
+
+1. Thin routes — no business logic in `api/`
+2. Each feature in its own folder — `api/v1/<feature>/routes.py` + `schemas.py`
+3. `api/v1/router.py` centralizes and registers all features
+4. Services instantiate repos in `__init__` — repos concentrate data access
+5. Services must not run queries directly — always via `repositories/`
+6. Transactions in `services/` — commit/rollback do not belong in routes
+7. `models/` only defines ORM schema; queries live in repos
+8. Versioned routes — prefix `/api/v1/` via central router
+
+## Where to put new code
+
+- New HTTP feature → `api/v1/<feature>/routes.py` + register in `api/v1/router.py`
+- Feature DTOs → `api/v1/<feature>/schemas.py`
+- DB table → `models/<entity>.py`
+- Query/persistence → `repositories/<entity>_repository.py`
+- Business rule → `services/<domain>_service.py`
+- LLM adapter (chat) → `core/llm/<vendor>.py`
+- Embedding adapter → `rag/embeddings/<vendor>.py`
+- Agent tool → `agents/tools/`
+- Ingestion/retrieval → `rag/`
+
+## Legacy (flat) code migration
+
+| Current | Target |
+|---------|--------|
+| `app/config.py` | `app/core/config.py` |
+| `app/database.py` | `app/core/database.py` |
+| `app/qdrant.py` | `app/core/qdrant.py` |
+| routes in `main.py` | `app/api/v1/<feature>/routes.py` + `app/api/v1/router.py` |
+| `main.py` | bootstrap + `app.include_router(v1_router, prefix="/api/v1")` |
