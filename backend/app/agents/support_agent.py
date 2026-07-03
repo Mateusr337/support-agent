@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from typing import Protocol
+from uuid import UUID
 
 from app.agents.prompts import SYSTEM_PROMPT
 from app.core.llm.base import LLMProvider, Message
+from app.services.audit_log_service import AuditLogService
 
 
 @dataclass(frozen=True)
@@ -27,11 +29,22 @@ class SupportAgent:
         *,
         top_k: int = 5,
         temperature: float = 0.2,
+        turn_id: UUID | None = None,
+        session_id: UUID | None = None,
+        user_id: int | None = None,
+        audit_log: AuditLogService | None = None,
     ) -> str:
         chunks = await self._retriever.search(user_message, top_k=top_k)
         context = self._format_context(chunks)
         messages = self._build_messages(user_message, history or [], context)
-        return await self._llm.chat(messages, temperature=temperature)
+        return await self._llm.chat(
+            messages,
+            temperature=temperature,
+            audit_log=audit_log,
+            session_id=session_id,
+            user_id=user_id,
+            turn_id=turn_id,
+        )
 
     def _format_context(self, chunks: list[RetrievedChunk]) -> str:
         if not chunks:

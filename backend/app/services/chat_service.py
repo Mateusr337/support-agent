@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession
 from app.repositories.chat_message_repository import ChatMessageRepository
 from app.repositories.chat_session_repository import ChatSessionRepository
+from app.services.audit_log_service import AuditLogService
 
 
 class ChatSessionNotFoundError(Exception):
@@ -32,6 +33,7 @@ class ChatService:
         self._agent = agent
         self._session_repository = ChatSessionRepository(db)
         self._message_repository = ChatMessageRepository(db)
+        self._audit_log = AuditLogService(db)
 
     def create_session(self, user_id: int) -> ChatSession:
         try:
@@ -92,6 +94,7 @@ class ChatService:
 
             prior_messages, _ = self._message_repository.list_by_session_id(session_id)
             history = self._to_llm_history(prior_messages)
+            turn_id = uuid4()
 
             user_message = self._message_repository.create(
                 chat_session_id=session_id,
@@ -99,7 +102,28 @@ class ChatService:
                 role="user",
                 content=content,
             )
-            reply = await self._agent.reply(content, history=history)
+            self._audit_log.info(
+                session_id=session_id,
+                user_id=user_id,
+                turn_id=turn_id,
+                type="agent_request",
+                message="Processing user message",
+            )
+            reply = await self._agent.reply(
+                content,
+                history=history,
+                turn_id=turn_id,
+                session_id=session_id,
+                user_id=user_id,
+                audit_log=self._audit_log,
+            )
+            self._audit_log.info(
+                session_id=session_id,
+                user_id=user_id,
+                turn_id=turn_id,
+                type="agent_response",
+                message="Agent reply generated",
+            )
             assistant_message = self._message_repository.create(
                 chat_session_id=session_id,
                 user_id=user_id,

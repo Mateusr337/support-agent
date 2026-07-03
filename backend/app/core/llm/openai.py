@@ -1,17 +1,9 @@
-import logging
+from uuid import UUID
 
 from openai import AsyncOpenAI
 
 from app.core.llm.base import Message
-
-logger = logging.getLogger(__name__)
-
-
-def _format_messages_for_log(messages: list[Message]) -> str:
-    lines: list[str] = []
-    for index, message in enumerate(messages, start=1):
-        lines.append(f"  [{index}] {message.role}: {message.content}")
-    return "\n".join(lines)
+from app.services.audit_log_service import AuditLogService
 
 
 class OpenAILLMProvider:
@@ -19,20 +11,32 @@ class OpenAILLMProvider:
         self._client = AsyncOpenAI(api_key=api_key)
         self._model = model
 
-    async def chat(self, messages: list[Message], *, temperature: float = 0.2) -> str:
+    async def chat(
+        self,
+        messages: list[Message],
+        *,
+        temperature: float = 0.2,
+        audit_log: AuditLogService | None = None,
+        session_id: UUID | None = None,
+        user_id: int | None = None,
+        turn_id: UUID | None = None,
+    ) -> str:
         payload = [
             {"role": message.role, "content": message.content} for message in messages
         ]
-        logger.info(
-            "LLM request\n"
-            "  model=%s\n"
-            "  temperature=%s\n"
-            "  message_count=%d\n"
-            "%s",
-            self._model,
-            temperature,
-            len(messages),
-            _format_messages_for_log(messages),
+        self._audit_info(
+            audit_log,
+            session_id=session_id,
+            user_id=user_id,
+            turn_id=turn_id,
+            type="agent_request",
+            message="LLM request",
+            data={
+                "model": self._model,
+                "temperature": temperature,
+                "message_count": len(messages),
+                "messages": payload,
+            },
         )
 
         response = await self._client.chat.completions.create(
@@ -44,9 +48,58 @@ class OpenAILLMProvider:
         if content is None:
             raise RuntimeError("OpenAI returned an empty response")
 
-        logger.info(
-            "LLM response\n  model=%s\n  content: %s",
-            self._model,
-            content,
+        self._audit_info(
+            audit_log,
+            session_id=session_id,
+            user_id=user_id,
+            turn_id=turn_id,
+            type="agent_response",
+            message="LLM response",
+            data={"model": self._model, "content": content},
         )
+
+        if response.usage is not None:
+            self._audit_info(
+                audit_log,
+                session_id=session_id,
+                user_id=user_id,
+                turn_id=turn_id,
+                type="token_usage",
+                message="LLM token usage",
+                data={
+                    "model": self._model,
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                },
+            )
+
         return content
+
+    def _audit_info(
+        self,
+        audit_log: AuditLogService | None,
+        *,
+        session_id: UUID | None,
+        user_id: int | None,
+        turn_id: UUID | None,
+        type: str,
+        message: str,
+        data: dict,
+    ) -> None:
+        if (
+            audit_log is None
+            or session_id is None
+            or user_id is None
+            or turn_id is None
+        ):
+            return
+
+        audit_log.info(
+            session_id=session_id,
+            user_id=user_id,
+            turn_id=turn_id,
+            type=type,
+            message=message,
+            data=data,
+        )

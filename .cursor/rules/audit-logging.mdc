@@ -1,0 +1,79 @@
+---
+description: Audit logging for AI flows and operations (not HTTP/API)
+globs: backend/app/agents/**,backend/app/services/**,backend/app/core/llm/**,backend/app/rag/**
+alwaysApply: false
+---
+
+# Audit Logging
+
+Audit AI pipeline steps — LLM calls, RAG retrieval, tool use, token usage, and errors. Do **not** use audit logs for HTTP/API concerns (request routing, status codes, auth middleware).
+
+## Who should use `AuditLogService`
+
+- `app/agents/` — agent orchestration, tool loops
+- `app/services/chat_service.py` — message processing entry point
+- `app/core/llm/` — provider calls and token usage
+- `app/rag/` — retrieval and ingestion
+- `app/agents/tools/` — individual tool invocations (when added)
+
+## Who should NOT use it
+
+- `app/api/` — never inject or call audit logging in route handlers or FastAPI dependencies exposed to routes
+
+## How to use
+
+Instantiate internally with the same DB session as the business transaction:
+
+```python
+class ChatService:
+    def __init__(self, db: Session, agent: SupportAgent) -> None:
+        self._db = db
+        self._audit_log = AuditLogService(db)
+```
+
+Log via `info()`, `warn()`, or `error()`:
+
+```python
+self._audit_log.info(
+    session_id=session_id,
+    user_id=user_id,
+    turn_id=turn_id,
+    type="agent_request",
+    message="Processing user message",
+    data={"content_length": len(content)},
+)
+```
+
+| Field | Purpose |
+|-------|---------|
+| `session_id` | Chat session UUID |
+| `user_id` | Owner of the session |
+| `turn_id` | One user message + full system processing cycle (see below) |
+| `type` | Event category (indexed) |
+| `message` | Human-readable summary |
+| `data` | Optional JSON payload |
+| `status` | Set by method: `info`, `warn`, or `error` |
+
+### `type` examples
+
+`tool_call`, `tool_response`, `agent_request`, `agent_response`, `token_usage`, `rag_call`
+
+## Turn ID
+
+`turn_id` groups every audit entry for a single processing cycle (one inbound user message through agent/LLM/RAG/tools to the assistant reply).
+
+- Scoped per chat session: a new UUID (`uuid4()`) assigned at the start of each `ChatService.process_message` call
+- Pass `turn_id` (and `session_id`, `user_id` when needed) into agents, LLM providers, and RAG helpers for downstream logging
+
+## When to log
+
+Log at meaningful pipeline steps:
+
+- User message accepted → `agent_request`
+- RAG retrieval → `rag_call`
+- LLM invocation / completion → `agent_response`, `token_usage`
+- Tool invoke / result → `tool_call`, `tool_response`
+- Recoverable issues → `warn`
+- Failures → `error`
+
+The orchestrating service owns the transaction commit; audit entries share that session and are persisted with the same commit.
