@@ -11,12 +11,12 @@ The application has the following requirements:
 - [x] Frontend with Graphical Interface, of your own choosing, to provide user interaction.
 - [x] Backend must run with Python code using FastAPI.
 - [x] Backend must have unit tests with at least 90% of coverage.
-- [ ] You can use either cloud or local (open source) models, of your own choosing. *(OpenAI adapter exists; not wired to chat yet)*
+- [ ] You can use either cloud or local (open source) models, of your own choosing. *(OpenAI wired to chat; local models not yet supported)*
 - [x] Must use an open-source Vector Database for performing RAG. *(Qdrant connected; ingestion pending)*
 - [ ] Must use only the attached documents for building the Vector Database.
 - [ ] Must use a Chunking Strategy to index the document on the Vector Database.
 - [ ] Must select a Search Strategy for retrieval.
-- [ ] Must have support for conversation with chat history. *(Messages stored; history not yet passed to LLM)*
+- [x] Must have support for conversation with chat history.
 - [x] Must store the user chats and history in the backend.
 - [x] Must run through Docker Compose, where all the application and necessary dependencies are containerized.
 - [ ] Scalability must be ensured with load tests (how many requests per minute the solution supports)
@@ -212,14 +212,13 @@ Implemented:
 - Alembic migrations (users, chat sessions, chat messages)
 - Health endpoints: `/api/v1/health`, `/api/v1/health/db`, `/api/v1/health/qdrant`
 - Auth: register, login, JWT, `/api/v1/auth/me`
-- Chat API: sessions, message storage, pagination, stub assistant replies
+- Chat API: sessions, message storage, pagination, LLM assistant replies with chat history
 - Frontend: auth (login / register), protected chat UI wired to the chat API
-- LLM scaffolding: `core/llm/` adapters and `SupportAgent` (not yet used by chat)
+- LLM integration: `core/llm/` adapters and `SupportAgent` wired into `ChatService`
 - Backend test suite with ~95% coverage
 
 Not yet implemented:
 
 - RAG pipeline (document ingestion, chunking, retrieval into Qdrant)
-- Wiring `SupportAgent` + LLM into `ChatService` (real answers with chat history)
 - HP document corpus and indexing
 - Load tests and quality benchmarks

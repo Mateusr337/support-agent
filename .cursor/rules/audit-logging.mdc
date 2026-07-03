@@ -1,6 +1,6 @@
 ---
 description: Audit logging for AI flows and operations (not HTTP/API)
-globs: backend/app/agents/**,backend/app/services/**,backend/app/core/llm/**,backend/app/rag/**
+globs: backend/app/agents/**,backend/app/tools/**,backend/app/services/**,backend/app/core/llm/**,backend/app/rag/**
 alwaysApply: false
 ---
 
@@ -14,7 +14,7 @@ Audit AI pipeline steps — LLM calls, RAG retrieval, tool use, token usage, and
 - `app/services/chat_service.py` — message processing entry point
 - `app/core/llm/` — provider calls and token usage
 - `app/rag/` — retrieval and ingestion
-- `app/agents/tools/` — individual tool invocations (when added)
+- `app/tools/` — individual tool invocations
 
 ## Who should NOT use it
 

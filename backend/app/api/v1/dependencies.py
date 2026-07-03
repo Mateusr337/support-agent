@@ -3,10 +3,10 @@ from functools import lru_cache
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.agents.registry import build_agent
 from app.agents.support_agent import SupportAgent
 from app.core.database import get_db
 from app.core.llm.factory import get_llm_provider
-from app.rag.retriever import NoOpRetriever
 from app.services.audit_log_service import AuditLogService
 from app.services.chat_service import ChatService
 from app.services.health_service import HealthService
@@ -23,10 +23,7 @@ def get_audit_log_service(db: Session = Depends(get_db)) -> AuditLogService:
 
 @lru_cache
 def get_support_agent() -> SupportAgent:
-    return SupportAgent(
-        llm=get_llm_provider(),
-        retriever=NoOpRetriever(),
-    )
+    return build_agent("support", get_llm_provider())
 
 
 def get_chat_service(

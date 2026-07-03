@@ -10,7 +10,14 @@ Stack: FastAPI, SQLAlchemy, Alembic, PostgreSQL, Qdrant.
 
 Pattern: **Service + Repository** (similar to NestJS/Express with an isolated data layer).
 
-## Folder structure (current)
+## Design principles
+
+- **RAG is infrastructure for knowledge** — ingest and search live in `rag/`; no agent or HTTP logic.
+- **Tools expose capabilities** — reusable, independent of any single agent.
+- **Agents compose capabilities** — prompts + LLM loop + assigned tools via registry.
+- **Services own HTTP/domain transactions** — chat, users, audit; they do not touch Qdrant directly.
+
+## Folder structure
 
 ```
 backend/
@@ -21,7 +28,7 @@ backend/
 │   │   ├── config.py
 │   │   ├── database.py         # engine, SessionLocal, get_db
 │   │   ├── security.py         # JWT, password hashing
-│   │   ├── qdrant.py           # Qdrant client
+│   │   ├── qdrant.py           # Qdrant client singleton
 │   │   └── llm/                # LLM adapters (chat/completion)
 │   │       ├── base.py         # LLMProvider protocol
 │   │       ├── openai.py
@@ -30,32 +37,48 @@ backend/
 │   ├── api/                    # HTTP — feature folders + central router
 │   │   └── v1/
 │   │       ├── router.py       # aggregates routers from each feature
-│   │       ├── dependencies.py # shared FastAPI deps (services)
+│   │       ├── dependencies.py # shared FastAPI deps (services, agents)
 │   │       ├── responses.py    # shared OpenAPI error responses
 │   │       ├── auth/
-│   │       │   ├── routes.py
-│   │       │   ├── schemas.py
-│   │       │   └── dependencies.py  # get_current_user
 │   │       ├── users/
-│   │       │   ├── routes.py
-│   │       │   └── schemas.py
 │   │       ├── chat/
-│   │       │   ├── routes.py
-│   │       │   └── schemas.py
+│   │       ├── audit/
 │   │       └── health/
-│   │           └── routes.py
 │   │
-│   ├── models/                 # SQLAlchemy ORM (user, chat_session, chat_message)
-│   ├── repositories/           # Data access (Postgres; Qdrant when RAG lands)
-│   ├── services/               # Business logic; instantiates repos in __init__
-│   └── agents/                 # Agent orchestration and prompts
-│       ├── support_agent.py    # RAG + LLM reply loop (ready, not wired to chat yet)
-│       └── prompts.py
+│   ├── models/                 # SQLAlchemy ORM
+│   ├── repositories/           # Data access (Postgres + Qdrant)
+│   │   ├── *_repository.py     # Postgres repos (existing pattern)
+│   │   └── vector_repository.py  # Qdrant: collection, upsert, search, delete
+│   │
+│   ├── rag/                    # RAG domain (no agents, no HTTP)
+│   │   ├── embeddings/         # embedding adapters (OpenAI, etc.)
+│   │   │   ├── base.py         # EmbeddingProvider protocol
+│   │   │   ├── openai.py
+│   │   │   └── factory.py
+│   │   ├── loaders/
+│   │   │   └── pdf.py          # PDF → page text
+│   │   ├── chunking.py         # chunk strategy (pure functions)
+│   │   └── service.py          # RagService: ingest_* + search
+│   │
+│   ├── tools/                  # Callable capabilities (separate from agents)
+│   │   ├── base.py             # Tool protocol, ToolContext, ToolResult
+│   │   ├── registry.py         # catalog + build_tool_set(names)
+│   │   └── search_documents.py # wraps RagService.search()
+│   │
+│   ├── agents/                 # Agent orchestration (no tool implementations)
+│   │   ├── registry.py         # AgentConfig + build_agent(name)
+│   │   ├── support_agent.py    # LLM loop + tool invocation
+│   │   └── prompts.py
+│   │
+│   └── services/               # Domain business logic; instantiates repos in __init__
+│       ├── chat_service.py
+│       ├── audit_log_service.py
+│       └── ...
 │
 ├── alembic/                    # migrations run on container startup
 ├── tests/
 │   ├── conftest.py             # shared fixtures (client, db, auth helpers)
-│   ├── unit/                   # services, core, repositories — mocked deps
+│   ├── unit/                   # services, core, repositories, rag, tools, agents
 │   └── api/                    # HTTP tests via TestClient
 ├── requirements.txt
 ├── requirements-dev.txt        # pytest, pytest-cov, httpx (local/CI only)
@@ -64,59 +87,147 @@ backend/
 └── Dockerfile
 ```
 
-## Planned (not yet in repo)
+### Scaling folders (when needed)
+
+Keep flat while small (< 5 files per package). Split only when hard to scan:
 
 ```
-app/rag/
-├── embeddings/         # embedding adapters (OpenAI, etc.)
-├── ingest.py
-└── retriever.py
-```
+tools/
+├── registry.py
+├── search_documents.py
+└── support/
+    └── create_ticket.py        # when 4–5+ tools or distinct domains
 
-Additional LLM vendors (e.g. `core/llm/anthropic.py`) and `agents/tools/` follow the same adapter pattern when needed.
+agents/
+├── registry.py
+└── support/
+    ├── agent.py
+    └── prompts.py              # when multiple agents with different loops
+```
 
 ## Layer responsibilities
 
 | Layer | Responsibility | Depends on |
 |-------|----------------|------------|
-| `api/v1/router.py` | Aggregates routers from each feature; mounted in `main.py` with prefix `/api/v1` | feature `routes.py` |
-| `api/v1/<feature>/` | Feature routes + schemas | `services` |
+| `api/v1/<feature>/` | Routes + schemas (thin) | `services` |
 | `models/` | ORM table/relationship definitions | `core/database` |
 | `repositories/` | Queries and persistence (Postgres, Qdrant) | `models`, `core/` |
-| `services/` | Business rules, transactions, orchestration | `repositories`, `agents`, `rag` |
-| `agents/` | Prompts, RAG context assembly, agent loop | `core/llm`, `rag` |
-| `rag/` *(planned)* | Ingestion, retrieval, and vector search | `rag/embeddings`, Qdrant |
-| `core/llm/` | LLM adapters (OpenAI today) | env vars |
-| `core/` | Config, DB, Qdrant, security | env vars |
+| `rag/` | Load → chunk → embed → search | `rag/embeddings`, `repositories/vector_repository` |
+| `tools/` | Callable capabilities exposed to agents | `rag/service` (and others as needed) |
+| `agents/` | Prompts, LLM loop, tool orchestration | `core/llm`, `tools/registry` |
+| `services/` | Business rules, transactions, orchestration | `repositories`, `agents` |
+| `core/llm/` | LLM vendor adapters (chat) | env vars |
+| `core/` | Config, DB, Qdrant client, security | env vars |
+
+### Dependency direction
+
+```
+api/ → services/ → agents/ → tools/ → rag/ → repositories/ → core/
+```
+
+- Agents **must not** import `rag/` or `repositories/vector_repository` directly.
+- Tools **must not** import agents.
+- `rag/service.py` **must not** import agents or tools.
+
+## RAG module
+
+Single entry point: `rag/service.py` (`RagService`).
+
+| Method | Purpose |
+|--------|---------|
+| `ingest_directory(path)` | Index all PDFs in a folder |
+| `ingest_file(path)` | Index a single document |
+| `search(query, top_k)` | Return ranked chunks with metadata |
+
+Ingest is triggered by CLI/startup script — not by `app/services/` unless an admin HTTP endpoint is added later.
+
+`repositories/vector_repository.py` owns all Qdrant operations:
+
+- `ensure_collection(vector_size)`
+- `upsert(points)`
+- `search(query_vector, top_k, score_threshold)`
+- `delete_by_doc_id(doc_id)`
+
+No `rag/retriever.py` — search is consumed via `RagService` and exposed as a tool.
+
+## Tools module
+
+Tools live in `tools/` (not under `agents/`). Each tool is a standalone file; `registry.py` maps names to factories.
+
+```python
+# tools/registry.py — wiring only, no business logic
+_TOOL_FACTORIES = {
+    "search_documents": lambda deps: SearchDocumentsTool(deps.rag),
+}
+
+def build_tool_set(names: tuple[str, ...], deps: ToolDeps) -> dict[str, Tool]:
+    return {name: _TOOL_FACTORIES[name](deps) for name in names}
+```
+
+## Agents module
+
+`agents/registry.py` defines per-agent config:
+
+```python
+@dataclass(frozen=True)
+class ToolBinding:
+    name: str
+    invocation: str  # "always" | "on_demand"
+
+@dataclass(frozen=True)
+class AgentConfig:
+    name: str
+    prompt: str
+    tools: tuple[ToolBinding, ...]
+    loop_mode: str  # "single_shot" | "tool_loop"
+```
+
+| Field | Behavior |
+|-------|----------|
+| `ToolBinding.invocation = "always"` | Tool runs before every LLM call (e.g. `search_documents`) |
+| `ToolBinding.invocation = "on_demand"` | Tool exposed to LLM; called only when needed (phase 2) |
+| `loop_mode = "single_shot"` | Run `always` tools → one LLM call (phase 1) |
+| `loop_mode = "tool_loop"` | Run `always` tools → LLM loop with `on_demand` tools (phase 2) |
+
+`dependencies.py` builds agents via `build_agent("support", get_llm_provider())`.
 
 ## Request flow
 
-**Today (chat without RAG):**
+**Current (chat + LLM, RAG pending):**
 
 ```
 Client → api/v1/chat → ChatService → repositories → PostgreSQL
-                              ↘ stub reply (SupportAgent not wired yet)
+                              ↘ agents/support_agent → core/llm/
+                                                       ↘ tools/ (NoOp / search_documents)
 ```
 
-**Target (RAG + LLM):**
+**Target (full RAG):**
 
 ```
-Client → api/ (route + DTO) → services/ → repositories/ → PostgreSQL / Qdrant
-                                ↘ agents/support_agent → core/llm/ (chat)
-                                                       ↘ rag/ → embeddings/ + Qdrant
+Client → api/v1/chat → ChatService → repositories → PostgreSQL
+                              ↘ agents/support_agent
+                                    ↘ tools/search_documents
+                                          ↘ rag/service
+                                                ↘ repositories/vector_repository → Qdrant
+                                    ↘ core/llm/ (chat)
 ```
 
-## LLM providers
+**Ingest (offline):**
 
-Vendor adapters live in `core/llm/` (chat) and, when added, `rag/embeddings/` (vectors).
-They implement a common interface — no prompts, tool calling, or business rules.
+```
+CLI / docker-entrypoint → rag/service.ingest_directory() → vector_repository → Qdrant
+```
+
+## LLM and embedding providers
+
+Vendor adapters implement a common interface — no prompts, tool calling, or business rules.
 
 | Type | Location | Status |
 |------|----------|--------|
 | LLM chat | `core/llm/` | OpenAI implemented |
 | Embeddings | `rag/embeddings/` | Planned |
 
-Env vars: `LLM_PROVIDER`, `LLM_MODEL`, `OPENAI_API_KEY` (see root `.env.example`).
+Env vars: `LLM_PROVIDER`, `LLM_MODEL`, `OPENAI_API_KEY`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `QDRANT_COLLECTION` (see `.env.example`).
 
 `get_db` lives in `core/database.py`. Services instantiate repos — routes only pass the session.
 
@@ -130,6 +241,8 @@ Env vars: `LLM_PROVIDER`, `LLM_MODEL`, `OPENAI_API_KEY` (see root `.env.example`
 6. Transactions in `services/` — commit/rollback do not belong in routes
 7. `models/` only defines ORM schema; queries live in repos
 8. Versioned routes — prefix `/api/v1/` via central router
+9. Tools are independent of agents — assign via `agents/registry.py`
+10. RAG logic stays in `rag/` — agents reach it only through tools
 
 ## Testing
 
@@ -137,7 +250,7 @@ Stack: **pytest**, **pytest-cov**, **httpx** (via `requirements-dev.txt`). Dev d
 
 | Type | Location | What to test |
 |------|----------|--------------|
-| Unit | `tests/unit/` | Services and core logic with mocked repos/clients |
+| Unit | `tests/unit/` | Services, rag, tools, agents — mocked repos/clients |
 | API | `tests/api/` | Routes, status codes, and JSON via `TestClient` |
 | Integration (later) | `tests/integration/` | Real Postgres / Qdrant when needed |
 
@@ -149,18 +262,25 @@ pip install -r requirements-dev.txt
 pytest --cov=app --cov-report=term-missing
 ```
 
-Use `app.dependency_overrides` in `conftest.py` to swap `get_db` and other FastAPI dependencies. Target: **≥ 90% coverage** on `app/` (currently ~95%).
+Use `app.dependency_overrides` in `conftest.py` to swap `get_db` and other FastAPI dependencies. Target: **≥ 90% coverage** on `app/`.
 
 ## Where to put new code
 
-- New HTTP feature → `api/v1/<feature>/routes.py` + register in `api/v1/router.py`
-- Feature DTOs → `api/v1/<feature>/schemas.py`
-- DB table → `models/<entity>.py` + Alembic migration
-- Query/persistence → `repositories/<entity>_repository.py`
-- Business rule → `services/<domain>_service.py`
-- LLM adapter (chat) → `core/llm/<vendor>.py` + register in `factory.py`
-- Embedding adapter → `rag/embeddings/<vendor>.py`
-- Agent tool → `agents/tools/`
-- Ingestion/retrieval → `rag/`
-- Unit test → `tests/unit/<layer>/test_<module>.py`
-- API test → `tests/api/test_<feature>.py`
+| What | Where |
+|------|-------|
+| New HTTP feature | `api/v1/<feature>/routes.py` + register in `router.py` |
+| Feature DTOs | `api/v1/<feature>/schemas.py` |
+| DB table | `models/<entity>.py` + Alembic migration |
+| Postgres query/persistence | `repositories/<entity>_repository.py` |
+| Qdrant operations | `repositories/vector_repository.py` |
+| Domain business rule | `services/<domain>_service.py` |
+| LLM adapter (chat) | `core/llm/<vendor>.py` + register in `factory.py` |
+| Embedding adapter | `rag/embeddings/<vendor>.py` + register in `factory.py` |
+| PDF loader / chunking | `rag/loaders/`, `rag/chunking.py` |
+| RAG ingest + search | `rag/service.py` |
+| New tool | `tools/<tool_name>.py` + register in `tools/registry.py` |
+| New agent | `agents/<name>_agent.py` + register in `agents/registry.py` |
+| Agent prompt | `agents/prompts.py` or `agents/<name>/prompts.py` when split |
+| Ingest CLI | `app/scripts/ingest_documents.py` |
+| Unit test | `tests/unit/<layer>/test_<module>.py` |
+| API test | `tests/api/test_<feature>.py` |

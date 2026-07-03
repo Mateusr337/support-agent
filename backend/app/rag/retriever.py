@@ -1,4 +1,4 @@
-from app.agents.support_agent import RetrievedChunk, Retriever
+from app.tools.base import RetrievedChunk
 
 
 class NoOpRetriever:
