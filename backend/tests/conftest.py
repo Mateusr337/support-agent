@@ -30,11 +30,21 @@ class FakeSupportAgent:
 
 @pytest.fixture(autouse=True)
 def block_real_openai_api_calls():
-    mock_client = MagicMock()
-    mock_client.chat.completions.create = AsyncMock(
+    mock_chat_client = MagicMock()
+    mock_chat_client.chat.completions.create = AsyncMock(
         side_effect=RuntimeError("OpenAI API must not be called in tests")
     )
-    with patch("app.core.llm.openai.AsyncOpenAI", return_value=mock_client):
+    mock_embedding_client = MagicMock()
+    mock_embedding_client.embeddings.create = AsyncMock(
+        side_effect=RuntimeError("OpenAI API must not be called in tests")
+    )
+    with (
+        patch("app.core.llm.openai.AsyncOpenAI", return_value=mock_chat_client),
+        patch(
+            "app.rag.embeddings.openai.AsyncOpenAI",
+            return_value=mock_embedding_client,
+        ),
+    ):
         yield
 
 

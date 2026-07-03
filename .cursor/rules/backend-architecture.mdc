@@ -225,7 +225,7 @@ Vendor adapters implement a common interface — no prompts, tool calling, or bu
 | Type | Location | Status |
 |------|----------|--------|
 | LLM chat | `core/llm/` | OpenAI implemented |
-| Embeddings | `rag/embeddings/` | Planned |
+| Embeddings | `rag/embeddings/` | OpenAI implemented |
 
 Env vars: `LLM_PROVIDER`, `LLM_MODEL`, `OPENAI_API_KEY`, `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `QDRANT_COLLECTION` (see `.env.example`).
 

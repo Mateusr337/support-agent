@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o-mini"
     openai_api_key: str | None = None
+    embedding_provider: str = "openai"
+    embedding_model: str = "text-embedding-3-small"
+    qdrant_collection: str = "support_documents"
 
     @property
     def cors_origin_list(self) -> list[str]:
