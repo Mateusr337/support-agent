@@ -1,0 +1,17 @@
+.chat-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 960px;
+  margin: 0 auto;
+  background: var(--color-bg);
+  border-left: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+}
+
+@media (max-width: 960px) {
+  .chat-window {
+    border-left: none;
+    border-right: none;
+  }
+}
