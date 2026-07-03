@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { ApiError } from "../../../services/api.js";
+import { chatService, PAGE_SIZE } from "../../../services/chatService.js";
 
 const WELCOME_MESSAGE = {
   id: "welcome",
@@ -9,38 +11,145 @@ const WELCOME_MESSAGE = {
 };
 
 export function useChat() {
-  const [messages, setMessages] = useState([WELCOME_MESSAGE]);
+  const [sessionId, setSessionId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
 
-  const sendMessage = useCallback(async (content) => {
-    const trimmed = content.trim();
-    if (!trimmed || sending) {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initSession() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const session = await chatService.getOrCreateActiveSession();
+        const page = await chatService.getSessionMessages(session.id, { limit: PAGE_SIZE });
+
+        if (cancelled) {
+          return;
+        }
+
+        setSessionId(session.id);
+        setHasMoreOlder(page.has_more);
+        setMessages(
+          page.items.length === 0
+            ? [WELCOME_MESSAGE]
+            : chatService.mapMessages(page.items)
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setMessages([]);
+          setError(
+            err instanceof ApiError
+              ? err.message
+              : "Unable to start chat session. Please try again."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    initSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!sessionId || loadingOlder || !hasMoreOlder) {
       return;
     }
 
-    const userMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: trimmed,
-      createdAt: new Date().toISOString(),
-    };
+    const oldestLoadedId = messages.find((message) => message.id !== WELCOME_MESSAGE.id)?.id;
+    if (!oldestLoadedId || oldestLoadedId === WELCOME_MESSAGE.id) {
+      return;
+    }
 
-    setMessages((current) => [...current, userMessage]);
-    setSending(true);
+    setLoadingOlder(true);
+    setError("");
 
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    try {
+      const page = await chatService.getSessionMessages(sessionId, {
+        limit: PAGE_SIZE,
+        offset: Number(oldestLoadedId),
+      });
 
-    const assistantMessage = {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      content:
-        "The chat API is not connected yet. Your message was received — RAG-powered responses will appear here once the backend is ready.",
-      createdAt: new Date().toISOString(),
-    };
+      setHasMoreOlder(page.has_more);
+      if (page.items.length > 0) {
+        setMessages((current) => [...chatService.mapMessages(page.items), ...current]);
+      }
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Unable to load older messages. Please try again."
+      );
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [sessionId, loadingOlder, hasMoreOlder, messages]);
 
-    setMessages((current) => [...current, assistantMessage]);
-    setSending(false);
-  }, [sending]);
+  const sendMessage = useCallback(
+    async (content) => {
+      const trimmed = content.trim();
+      if (!trimmed || sending || !sessionId) {
+        return;
+      }
 
-  return { messages, sending, sendMessage };
+      const optimisticId = crypto.randomUUID();
+      const userMessage = {
+        id: optimisticId,
+        role: "user",
+        content: trimmed,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((current) => {
+        const withoutWelcome =
+          current.length === 1 && current[0].id === WELCOME_MESSAGE.id ? [] : current;
+        return [...withoutWelcome, userMessage];
+      });
+      setSending(true);
+      setError("");
+
+      try {
+        const result = await chatService.sendMessage(sessionId, trimmed);
+        setMessages((current) => {
+          const withoutOptimistic = current.filter((message) => message.id !== optimisticId);
+          return [...withoutOptimistic, result.user_message, result.assistant_message];
+        });
+      } catch (err) {
+        setMessages((current) => current.filter((message) => message.id !== optimisticId));
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "Unable to send message. Please try again."
+        );
+      } finally {
+        setSending(false);
+      }
+    },
+    [sessionId, sending]
+  );
+
+  return {
+    messages,
+    loading,
+    loadingOlder,
+    hasMoreOlder,
+    sending,
+    error,
+    sendMessage,
+    loadOlderMessages,
+    canSend: Boolean(sessionId),
+  };
 }
