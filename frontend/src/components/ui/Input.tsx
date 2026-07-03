@@ -1,4 +1,11 @@
+import type { InputHTMLAttributes } from "react";
 import "./Input.css";
+
+interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+  label?: string;
+  error?: string;
+  hint?: string;
+}
 
 export default function Input({
   id,
@@ -7,7 +14,7 @@ export default function Input({
   hint,
   className = "",
   ...props
-}) {
+}: InputProps) {
   const inputId = id ?? props.name;
 
   return (

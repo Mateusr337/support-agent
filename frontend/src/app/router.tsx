@@ -1,11 +1,16 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import Spinner from "../components/ui/Spinner.jsx";
-import { useAuth } from "../features/auth/hooks/useAuth.jsx";
-import ChatPage from "../pages/chat/ChatPage.jsx";
-import LoginPage from "../pages/login/LoginPage.jsx";
-import RegisterPage from "../pages/register/RegisterPage.jsx";
+import type { ReactNode } from "react";
+import Spinner from "../components/ui/Spinner";
+import { useAuth } from "../features/auth/hooks/useAuth";
+import ChatPage from "../pages/chat/ChatPage";
+import LoginPage from "../pages/login/LoginPage";
+import RegisterPage from "../pages/register/RegisterPage";
 
-function ProtectedRoute({ children }) {
+interface RouteGuardProps {
+  children: ReactNode;
+}
+
+function ProtectedRoute({ children }: RouteGuardProps) {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
@@ -19,7 +24,7 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-function GuestRoute({ children }) {
+function GuestRoute({ children }: RouteGuardProps) {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {

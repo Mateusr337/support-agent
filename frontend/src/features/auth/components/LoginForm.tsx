@@ -1,39 +1,32 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ApiError } from "../../../services/api.js";
-import Button from "../../../components/ui/Button.jsx";
-import Input from "../../../components/ui/Input.jsx";
-import { useAuth } from "../hooks/useAuth.jsx";
+import { ApiError } from "../../../services/api";
+import Button from "../../../components/ui/Button";
+import Input from "../../../components/ui/Input";
+import { useAuth } from "../hooks/useAuth";
 import "./AuthForm.css";
 
-export default function RegisterForm() {
+export default function LoginForm() {
   const navigate = useNavigate();
-  const { register } = useAuth();
-  const [name, setName] = useState("");
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(event) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-
     setLoading(true);
 
     try {
-      await register(email.trim(), name.trim(), password);
+      await login(email.trim(), password);
       navigate("/chat", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError("Unable to create account. Please try again.");
+        setError("Unable to sign in. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -46,8 +39,8 @@ export default function RegisterForm() {
         <div className="auth-logo" aria-hidden="true">
           HP
         </div>
-        <h1>Create account</h1>
-        <p>Get started with the HP document assistant</p>
+        <h1>Welcome back</h1>
+        <p>Sign in to chat with the HP Support Agent</p>
       </div>
 
       {error && (
@@ -55,17 +48,6 @@ export default function RegisterForm() {
           {error}
         </div>
       )}
-
-      <Input
-        label="Full name"
-        name="name"
-        type="text"
-        autoComplete="name"
-        placeholder="Jane Doe"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        required
-      />
 
       <Input
         label="Email"
@@ -82,20 +64,19 @@ export default function RegisterForm() {
         label="Password"
         name="password"
         type="password"
-        autoComplete="new-password"
-        placeholder="At least 8 characters"
+        autoComplete="current-password"
+        placeholder="Enter your password"
         value={password}
         onChange={(event) => setPassword(event.target.value)}
-        hint="Minimum 8 characters"
         required
       />
 
       <Button type="submit" fullWidth loading={loading}>
-        Create account
+        Sign in
       </Button>
 
       <p className="auth-footer">
-        Already have an account? <Link to="/login">Sign in</Link>
+        Don&apos;t have an account? <Link to="/register">Create one</Link>
       </p>
     </form>
   );

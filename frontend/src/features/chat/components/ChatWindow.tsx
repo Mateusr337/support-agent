@@ -1,8 +1,8 @@
-import Spinner from "../../../components/ui/Spinner.jsx";
-import ChatHeader from "./ChatHeader.jsx";
-import MessageInput from "./MessageInput.jsx";
-import MessageList from "./MessageList.jsx";
-import { useChat } from "../hooks/useChat.js";
+import Spinner from "../../../components/ui/Spinner";
+import ChatHeader from "./ChatHeader";
+import MessageInput from "./MessageInput";
+import MessageList from "./MessageList";
+import { useChat } from "../hooks/useChat";
 import "./ChatWindow.css";
 
 export default function ChatWindow() {

@@ -1,4 +1,4 @@
-import RegisterForm from "../../features/auth/components/RegisterForm.jsx";
+import RegisterForm from "../../features/auth/components/RegisterForm";
 import "../../features/auth/components/AuthForm.css";
 
 export default function RegisterPage() {

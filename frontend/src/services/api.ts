@@ -1,8 +1,11 @@
-import { API_URL } from "../lib/env.js";
-import { clearToken, getToken } from "../lib/authStorage.js";
+import { API_URL } from "../lib/env";
+import { clearToken, getToken } from "../lib/authStorage";
 
 export class ApiError extends Error {
-  constructor(status, message, detail) {
+  readonly status: number;
+  readonly detail: unknown;
+
+  constructor(status: number, message: string, detail?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -10,10 +13,27 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest(path, options = {}) {
+interface ValidationErrorItem {
+  msg: string;
+}
+
+interface ApiErrorPayload {
+  detail?: string | ValidationErrorItem[];
+}
+
+export interface ApiRequestOptions {
+  method?: string;
+  body?: unknown;
+  auth?: boolean;
+}
+
+export async function apiRequest<T>(
+  path: string,
+  options: ApiRequestOptions = {}
+): Promise<T> {
   const { method = "GET", body, auth = true } = options;
 
-  const headers = {
+  const headers: Record<string, string> = {
     Accept: "application/json",
   };
 
@@ -35,14 +55,14 @@ export async function apiRequest(path, options = {}) {
   });
 
   if (response.status === 204) {
-    return null;
+    return null as T;
   }
 
-  let payload = null;
+  let payload: ApiErrorPayload | null = null;
   const contentType = response.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
-    payload = await response.json();
+    payload = (await response.json()) as ApiErrorPayload;
   }
 
   if (!response.ok) {
@@ -64,5 +84,5 @@ export async function apiRequest(path, options = {}) {
     );
   }
 
-  return payload;
+  return payload as T;
 }

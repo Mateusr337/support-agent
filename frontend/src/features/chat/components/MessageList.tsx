@@ -1,8 +1,13 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import Spinner from "../../../components/ui/Spinner.jsx";
+import type { ChatMessage } from "../../../types/chat";
+import Spinner from "../../../components/ui/Spinner";
 import "./MessageList.css";
 
-function MessageBubble({ message }) {
+interface MessageBubbleProps {
+  message: ChatMessage;
+}
+
+function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
 
   return (
@@ -19,18 +24,31 @@ function MessageBubble({ message }) {
   );
 }
 
+interface ScrollRestoreState {
+  scrollHeight: number;
+  scrollTop: number;
+}
+
+interface MessageListProps {
+  messages: ChatMessage[];
+  sending: boolean;
+  loadingOlder?: boolean;
+  hasMoreOlder?: boolean;
+  onLoadOlder?: () => void;
+}
+
 export default function MessageList({
   messages,
   sending,
   loadingOlder = false,
   hasMoreOlder = false,
   onLoadOlder,
-}) {
-  const listRef = useRef(null);
-  const bottomRef = useRef(null);
-  const pendingScrollRestoreRef = useRef(null);
+}: MessageListProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const pendingScrollRestoreRef = useRef<ScrollRestoreState | null>(null);
   const initialScrollDoneRef = useRef(false);
-  const previousLastMessageIdRef = useRef(null);
+  const previousLastMessageIdRef = useRef<string | null>(null);
   const wasLoadingOlderRef = useRef(false);
 
   useLayoutEffect(() => {
@@ -49,7 +67,8 @@ export default function MessageList({
 
     wasLoadingOlderRef.current = loadingOlder;
 
-    const lastMessageId = messages.at(-1)?.id ?? null;
+    const lastMessageId =
+      messages.length > 0 ? messages[messages.length - 1].id : null;
     const appendedAtBottom = lastMessageId !== previousLastMessageIdRef.current;
     previousLastMessageIdRef.current = lastMessageId;
 
@@ -69,25 +88,26 @@ export default function MessageList({
       return;
     }
 
-    const list = listRef.current;
-    if (!list) {
+    const listEl = listRef.current;
+    if (!listEl) {
       return;
     }
 
     function handleScroll() {
-      if (list.scrollTop > 80 || loadingOlder || pendingScrollRestoreRef.current) {
+      const el = listRef.current;
+      if (!el || el.scrollTop > 80 || loadingOlder || pendingScrollRestoreRef.current) {
         return;
       }
 
       pendingScrollRestoreRef.current = {
-        scrollHeight: list.scrollHeight,
-        scrollTop: list.scrollTop,
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop,
       };
-      onLoadOlder();
+      onLoadOlder?.();
     }
 
-    list.addEventListener("scroll", handleScroll, { passive: true });
-    return () => list.removeEventListener("scroll", handleScroll);
+    listEl.addEventListener("scroll", handleScroll, { passive: true });
+    return () => listEl.removeEventListener("scroll", handleScroll);
   }, [loadingOlder, hasMoreOlder, onLoadOlder]);
 
   return (

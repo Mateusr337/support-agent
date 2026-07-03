@@ -1,12 +1,16 @@
-import { useState } from "react";
-import Button from "../../../components/ui/Button.jsx";
+import { useState, type FormEvent, type KeyboardEvent } from "react";
+import Button from "../../../components/ui/Button";
 import "./MessageInput.css";
 
-export default function MessageInput({ onSend, disabled = false }) {
+interface MessageInputProps {
+  onSend: (content: string) => void;
+  disabled?: boolean;
+}
+
+export default function MessageInput({ onSend, disabled = false }: MessageInputProps) {
   const [value, setValue] = useState("");
 
-  function handleSubmit(event) {
-    event.preventDefault();
+  function submitMessage() {
     if (!value.trim() || disabled) {
       return;
     }
@@ -15,10 +19,15 @@ export default function MessageInput({ onSend, disabled = false }) {
     setValue("");
   }
 
-  function handleKeyDown(event) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    submitMessage();
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      handleSubmit(event);
+      submitMessage();
     }
   }
 

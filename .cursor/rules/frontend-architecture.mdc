@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Frontend Architecture
 
-Stack: React 19, Vite, React Router.
+Stack: React 19, TypeScript, Vite, React Router.
 
 Pattern: **Pages + Features + Services** (mirrors backend feature folders with a thin HTTP layer).
 
@@ -15,44 +15,51 @@ Pattern: **Pages + Features + Services** (mirrors backend feature folders with a
 ```
 frontend/
 ├── src/
-│   ├── main.jsx                    # entry point
-│   ├── App.jsx                     # root layout + router outlet
+│   ├── main.tsx                    # entry point
+│   ├── App.tsx                     # root layout + router outlet
+│   ├── vite-env.d.ts               # Vite env typings
 │   │
 │   ├── app/                        # bootstrap (no UI)
-│   │   ├── router.jsx              # route definitions
-│   │   └── providers.jsx           # context providers (auth, theme, etc.)
+│   │   ├── router.tsx              # route definitions
+│   │   └── providers.tsx           # context providers (auth, theme, etc.)
 │   │
 │   ├── pages/                      # route-level screens — thin, compose features
 │   │   ├── login/
-│   │   │   └── LoginPage.jsx
+│   │   │   └── LoginPage.tsx
 │   │   ├── register/
-│   │   │   └── RegisterPage.jsx
+│   │   │   └── RegisterPage.tsx
 │   │   └── chat/
-│   │       └── ChatPage.jsx
+│   │       └── ChatPage.tsx
 │   │
 │   ├── features/                   # domain UI + hooks grouped by feature
 │   │   ├── auth/
 │   │   │   ├── components/         # LoginForm, RegisterForm, etc.
-│   │   │   └── hooks/              # useAuth, useLogin, etc.
+│   │   │   └── hooks/              # useAuth, etc.
 │   │   └── chat/
 │   │       ├── components/         # ChatWindow, MessageList, MessageInput
-│   │       └── hooks/              # useChat, useMessages, etc.
+│   │       └── hooks/              # useChat, etc.
 │   │
 │   ├── components/                 # shared UI not tied to one feature
 │   │   └── ui/                     # Button, Input, Spinner, etc.
 │   │
 │   ├── services/                   # HTTP / API layer (calls backend)
-│   │   ├── api.js                  # base client (fetch, auth headers, errors)
-│   │   ├── authService.js
-│   │   └── chatService.js
+│   │   ├── api.ts                  # base client (fetch, auth headers, errors)
+│   │   ├── authService.ts
+│   │   └── chatService.ts
+│   │
+│   ├── types/                      # shared TypeScript types and API DTOs
+│   │   ├── api/                    # backend response/request shapes
+│   │   ├── auth.ts                 # auth domain types
+│   │   └── chat.ts                 # chat domain / UI model types
 │   │
 │   ├── hooks/                      # shared hooks (cross-feature)
 │   ├── lib/                        # utilities (env, formatters, constants)
-│   │   └── env.js
+│   │   └── env.ts
 │   └── styles/                     # global / shared CSS modules
 │
 ├── index.html
-├── vite.config.js
+├── tsconfig.json
+├── vite.config.ts
 └── package.json
 ```
 
@@ -60,12 +67,13 @@ frontend/
 
 | Layer | Responsibility | Depends on |
 |-------|----------------|------------|
-| `app/router.jsx` | Route map, lazy loading, protected routes | `pages/` |
-| `app/providers.jsx` | Wraps app with AuthProvider and other contexts | `features/*/hooks` |
+| `app/router.tsx` | Route map, lazy loading, protected routes | `pages/` |
+| `app/providers.tsx` | Wraps app with AuthProvider and other contexts | `features/*/hooks` |
 | `pages/` | One screen per route; wires feature components together | `features/`, `components/` |
-| `features/<domain>/` | Domain-specific UI, local state, feature hooks | `services/`, `components/ui` |
+| `features/<domain>/` | Domain-specific UI, local state, feature hooks | `services/`, `components/ui`, `types/` |
 | `components/ui/` | Reusable presentational components | nothing domain-specific |
-| `services/` | API calls to backend (`/api/v1/...`); no React | `lib/env` |
+| `services/` | API calls to backend (`/api/v1/...`); no React | `lib/`, `types/api/` |
+| `types/` | Shared interfaces, API DTOs, hook return types | nothing runtime-specific |
 | `hooks/` | Shared hooks used by multiple features | varies |
 | `lib/` | Pure utilities, env validation | env vars |
 
@@ -75,6 +83,20 @@ frontend/
 Page → feature component/hook → service → backend API
                 ↘ components/ui (presentational)
 ```
+
+## TypeScript requirements
+
+1. **All source files use `.ts` / `.tsx`** — no new `.js` / `.jsx` in `src/`
+2. **`strict` mode enabled** — run `npm run typecheck` before merge
+3. **API DTOs** live in `types/api/` matching backend schemas (snake_case)
+4. **UI/domain models** live in `types/<domain>.ts` (camelCase where mapped in services)
+5. **Services map API → UI types** — hooks and components consume typed models, not raw JSON
+6. **Public hook return types** — export interfaces (e.g. `UseChatReturn`, `AuthContextValue`)
+7. **Component props** — explicit interfaces for every component with non-trivial props
+8. **No `any`** — use `unknown` in catch blocks and narrow with type guards
+9. **Generic `apiRequest<T>`** — every service method declares its response type
+
+Types serve as living documentation: prefer explicit interfaces over inline object types for shared shapes.
 
 ## Routes (initial)
 
@@ -91,15 +113,16 @@ Page → feature component/hook → service → backend API
 2. **Feature colocation** — auth UI/hooks live under `features/auth/`, chat under `features/chat/`
 3. **Services own HTTP** — all `fetch` calls go through `services/`; components and hooks call services
 4. **Shared UI only in `components/ui/`** — feature-specific markup stays in `features/<domain>/components/`
-5. **Env in one place** — read `import.meta.env` only in `lib/env.js`
+5. **Env in one place** — read `import.meta.env` only in `lib/env.ts`
 6. **No business rules in services** — services map request/response; validation and orchestration live in hooks or backend
 
 ## Where to put new code
 
-- New route/screen → `pages/<name>/<Name>Page.jsx` + register in `app/router.jsx`
+- New route/screen → `pages/<name>/<Name>Page.tsx` + register in `app/router.tsx`
 - Auth UI or hook → `features/auth/`
 - Chat UI or hook → `features/chat/`
 - Reusable button/input/layout → `components/ui/`
-- New API integration → `services/<domain>Service.js`
+- New API integration → `services/<domain>Service.ts` + `types/api/<domain>.ts`
+- UI/domain type → `types/<domain>.ts`
 - Shared hook → `hooks/`
 - Utility / constant → `lib/`

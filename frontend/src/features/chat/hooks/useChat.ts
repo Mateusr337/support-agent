@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError } from "../../../services/api.js";
-import { chatService, PAGE_SIZE } from "../../../services/chatService.js";
+import type { ChatMessage, UseChatReturn } from "../../../types/chat";
+import { ApiError } from "../../../services/api";
+import { chatService, PAGE_SIZE } from "../../../services/chatService";
 
-const WELCOME_MESSAGE = {
+const WELCOME_MESSAGE: ChatMessage = {
   id: "welcome",
   role: "assistant",
   content:
@@ -10,9 +11,9 @@ const WELCOME_MESSAGE = {
   createdAt: new Date().toISOString(),
 };
 
-export function useChat() {
-  const [sessionId, setSessionId] = useState(null);
-  const [messages, setMessages] = useState([]);
+export function useChat(): UseChatReturn {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -37,9 +38,7 @@ export function useChat() {
         setSessionId(session.id);
         setHasMoreOlder(page.has_more);
         setMessages(
-          page.items.length === 0
-            ? [WELCOME_MESSAGE]
-            : chatService.mapMessages(page.items)
+          page.items.length === 0 ? [WELCOME_MESSAGE] : chatService.mapMessages(page.items)
         );
       } catch (err) {
         if (!cancelled) {
@@ -57,7 +56,7 @@ export function useChat() {
       }
     }
 
-    initSession();
+    void initSession();
 
     return () => {
       cancelled = true;
@@ -99,14 +98,14 @@ export function useChat() {
   }, [sessionId, loadingOlder, hasMoreOlder, messages]);
 
   const sendMessage = useCallback(
-    async (content) => {
+    async (content: string) => {
       const trimmed = content.trim();
       if (!trimmed || sending || !sessionId) {
         return;
       }
 
       const optimisticId = crypto.randomUUID();
-      const userMessage = {
+      const userMessage: ChatMessage = {
         id: optimisticId,
         role: "user",
         content: trimmed,

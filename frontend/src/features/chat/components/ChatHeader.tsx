@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import Button from "../../../components/ui/Button.jsx";
-import { useAuth } from "../../auth/hooks/useAuth.jsx";
+import Button from "../../../components/ui/Button";
+import { useAuth } from "../../auth/hooks/useAuth";
 import "./ChatHeader.css";
 
 export default function ChatHeader() {
