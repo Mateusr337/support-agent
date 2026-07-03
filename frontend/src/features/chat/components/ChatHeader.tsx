@@ -25,6 +25,9 @@ export default function ChatHeader() {
       </div>
 
       <div className="chat-header-actions">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/audit")}>
+          Audit Logs
+        </Button>
         {user && <span className="chat-header-user">{user.name}</span>}
         <Button variant="ghost" size="sm" onClick={handleLogout}>
           Sign out

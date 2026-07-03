@@ -5,6 +5,7 @@ import { useAuth } from "../features/auth/hooks/useAuth";
 import ChatPage from "../pages/chat/ChatPage";
 import LoginPage from "../pages/login/LoginPage";
 import RegisterPage from "../pages/register/RegisterPage";
+import AuditLogsPage from "../pages/audit/AuditLogsPage";
 
 interface RouteGuardProps {
   children: ReactNode;
@@ -73,6 +74,14 @@ export default function AppRouter() {
         element={
           <ProtectedRoute>
             <ChatPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/audit"
+        element={
+          <ProtectedRoute>
+            <AuditLogsPage />
           </ProtectedRoute>
         }
       />
