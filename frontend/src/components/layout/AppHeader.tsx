@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import Button from "../ui/Button";
+import ConfirmDialog from "../ui/ConfirmDialog";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 import "./AppHeader.css";
 
@@ -27,10 +28,16 @@ function MenuIcon() {
   );
 }
 
-export default function AppHeader() {
+interface AppHeaderProps {
+  onReload?: () => void | Promise<void>;
+}
+
+export default function AppHeader({ onReload }: AppHeaderProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [reloadConfirmOpen, setReloadConfirmOpen] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   function handleLogout() {
@@ -41,6 +48,32 @@ export default function AppHeader() {
 
   function closeMenu() {
     setMenuOpen(false);
+  }
+
+  function openReloadConfirm() {
+    closeMenu();
+    setReloadConfirmOpen(true);
+  }
+
+  function closeReloadConfirm() {
+    if (reloading) {
+      return;
+    }
+    setReloadConfirmOpen(false);
+  }
+
+  async function handleReloadConfirm() {
+    if (!onReload || reloading) {
+      return;
+    }
+
+    setReloading(true);
+    try {
+      await onReload();
+      setReloadConfirmOpen(false);
+    } finally {
+      setReloading(false);
+    }
   }
 
   useEffect(() => {
@@ -105,13 +138,23 @@ export default function AppHeader() {
 
           {menuOpen && (
             <div className="app-header-menu-dropdown" role="menu">
+              {onReload && (
+                <button
+                  type="button"
+                  className="app-header-menu-item"
+                  role="menuitem"
+                  onClick={openReloadConfirm}
+                >
+                  Reload
+                </button>
+              )}
               <NavLink
                 to="/audit"
                 className="app-header-menu-item"
                 role="menuitem"
                 onClick={closeMenu}
               >
-                Audit Logs
+                Audit
               </NavLink>
               <div className="app-header-menu-divider" role="separator" />
               <button
@@ -126,6 +169,18 @@ export default function AppHeader() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={reloadConfirmOpen}
+        title="Start a new chat?"
+        description="This will clear your current conversation and begin a fresh session. This action cannot be undone."
+        confirmLabel="Start new chat"
+        cancelLabel="Keep chatting"
+        confirmVariant="danger"
+        loading={reloading}
+        onConfirm={handleReloadConfirm}
+        onCancel={closeReloadConfirm}
+      />
     </header>
   );
 }

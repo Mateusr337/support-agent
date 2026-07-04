@@ -21,5 +21,6 @@ export interface UseChatReturn {
   error: string;
   sendMessage: (content: string) => Promise<void>;
   loadOlderMessages: () => Promise<void>;
+  reloadSession: () => Promise<void>;
   canSend: boolean;
 }

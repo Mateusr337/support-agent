@@ -60,6 +60,12 @@ export const chatService = {
     };
   },
 
+  async reloadSession(): Promise<ChatSessionResponse> {
+    return apiRequest<ChatSessionResponse>("/api/v1/chat/conversations/reload", {
+      method: "POST",
+    });
+  },
+
   mapMessages(apiMessages: ChatMessageResponse[]): ChatMessage[] {
     return apiMessages.map(mapMessage);
   },

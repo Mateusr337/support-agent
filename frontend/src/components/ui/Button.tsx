@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import "./Button.css";
 
 const VARIANTS = {
@@ -25,17 +25,20 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
-export default function Button({
-  children,
-  variant = "primary",
-  size = "md",
-  type = "button",
-  disabled = false,
-  loading = false,
-  fullWidth = false,
-  className = "",
-  ...props
-}: ButtonProps) {
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    children,
+    variant = "primary",
+    size = "md",
+    type = "button",
+    disabled = false,
+    loading = false,
+    fullWidth = false,
+    className = "",
+    ...props
+  },
+  ref
+) {
   const classes = [
     "btn",
     VARIANTS[variant],
@@ -49,6 +52,7 @@ export default function Button({
 
   return (
     <button
+      ref={ref}
       type={type}
       className={classes}
       disabled={disabled || loading}
@@ -58,4 +62,6 @@ export default function Button({
       <span className={loading ? "btn-label-loading" : ""}>{children}</span>
     </button>
   );
-}
+});
+
+export default Button;

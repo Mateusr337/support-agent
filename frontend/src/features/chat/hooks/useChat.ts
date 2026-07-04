@@ -143,6 +143,30 @@ export function useChat(): UseChatReturn {
     [sessionId, sending]
   );
 
+  const reloadSession = useCallback(async () => {
+    if (sending) {
+      return;
+    }
+
+    setSending(true);
+    setError("");
+
+    try {
+      const session = await chatService.reloadSession();
+      setSessionId(session.id);
+      setMessages([WELCOME_MESSAGE]);
+      setHasMoreOlder(false);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Unable to start a new chat session. Please try again."
+      );
+    } finally {
+      setSending(false);
+    }
+  }, [sending]);
+
   return {
     messages,
     loading,
@@ -152,6 +176,7 @@ export function useChat(): UseChatReturn {
     error,
     sendMessage,
     loadOlderMessages,
+    reloadSession,
     canSend: Boolean(sessionId),
   };
 }

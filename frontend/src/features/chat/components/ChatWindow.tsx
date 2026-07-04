@@ -15,6 +15,7 @@ export default function ChatWindow() {
     error,
     sendMessage,
     loadOlderMessages,
+    reloadSession,
     canSend,
   } = useChat();
 
@@ -29,7 +30,7 @@ export default function ChatWindow() {
 
   return (
     <div className="chat-window">
-      <AppHeader />
+      <AppHeader onReload={reloadSession} />
       {error && (
         <div className="chat-error" role="alert">
           {error}
