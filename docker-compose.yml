@@ -44,6 +44,10 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-support_documents}
       DOCUMENTS_DIR: ${DOCUMENTS_DIR:-/app/rag-docs}
+      LOAD_TEST: ${LOAD_TEST:-false}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
     volumes:
       - ./backend/app:/app/app
       - ./rag-docs:/app/rag-docs:ro

@@ -31,7 +31,6 @@ class AuditLogRepository:
             data=data,
         )
         self._db.add(log)
-        self._db.flush()
         return log
 
     def list(

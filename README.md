@@ -19,8 +19,8 @@ The application has the following requirements:
 - [x] Must have support for conversation with chat history.
 - [x] Must store the user chats and history in the backend.
 - [x] Must run through Docker Compose, where all the application and necessary dependencies are containerized.
-- [ ] Scalability must be ensured with load tests (how many requests per minute the solution supports)
-- [x] Must benchmark the quality of the LLM responses to the user.
+- [x] Scalability must be ensured with load tests — see [Load & scalability summary](#load--scalability-summary)
+- [x] Must benchmark the quality of the LLM responses to the user — see [LLM quality benchmark](#llm-quality-benchmark-deepeval).
 
 ## Overview
 
@@ -258,40 +258,27 @@ pytest --cov=app --cov-report=html           # HTML report → htmlcov/index.htm
 
 Layout mirrors the backend layers — see `.cursor/rules/backend-architecture.mdc` (Testing section).
 
+LLM response quality is benchmarked separately — see [LLM quality benchmark](#llm-quality-benchmark-deepeval).
+
 ## LLM quality benchmark (DeepEval)
 
-Standalone evaluation against the live API (not part of `pytest` or coverage). Pilot covers cases 1 and 10 from [usecases/agent-manual-tests.md](usecases/agent-manual-tests.md).
-
-**Prerequisites:**
-
-```bash
-docker compose up --build
-docker compose exec backend python -m app.scripts.ingest_documents --force
-export OPENAI_API_KEY=sk-...
-```
-
-**Install dev deps (once):**
+Not part of `pytest` or coverage. Requires the live API, ingested PDFs, and `OPENAI_API_KEY`.
 
 ```bash
 cd backend
 source .venv/bin/activate
 pip install -r requirements-dev.txt
-```
-
-**Run:**
-
-```bash
 python -m app.scripts.run_deepeval --base-url http://localhost:8000
 ```
 
-Writes `eval_report.json` and prints per-metric scores. Judge model: **gpt-4o**. A case **passes** only when **all** configured metrics pass.
+Latest report: [backend/eval_report.json](backend/eval_report.json). Case specs: [specs-docs/agent-manual-tests.md](specs-docs/agent-manual-tests.md).
 
 | Case                  | Answer Relevancy | Faithfulness | Contextual Relevancy / Hallucination | GEval            | Pass |
 | --------------------- | ---------------- | ------------ | ------------------------------------ | ---------------- | ---- |
 | 1 - Laptop safety     | 1.00             | 1.00         | Contextual 0.60                      | SafetyFacts 1.00 | Yes  |
 | 10 - No hallucination | 0.75             | 1.00         | Hallucination 0.00                   | NoPrinthead 1.00 | Yes  |
 
-Last run: **2/2** cases passed (2026-07-04). To extend the suite, add cases to [backend/eval/dataset.py](backend/eval/dataset.py).
+**2/2** cases passed (2026-07-04).
 
 ## Current status
 
@@ -308,125 +295,107 @@ Implemented:
 - Frontend: auth (login / register), chat UI with scroll-to-load-older messages, audit logs UI with infinite scroll
 - LLM integration: `core/llm/` adapters and `SupportAgent` wired into `ChatService`
 - Backend test suite: **180 tests**, **97.1%** coverage on `app/`
-- LLM quality benchmark (DeepEval): cases 1 and 10 via `python -m app.scripts.run_deepeval`
+- [LLM quality benchmark](#llm-quality-benchmark-deepeval)
+- Load tests (Locust Mode A): **300 users, 0% errors**, ~147 req/s — [summary](#load--scalability-summary)
 
 Not yet implemented:
 
-- Load tests
 - Full 10-case DeepEval suite (cases 2–9)
+- Production ingest pipeline, admin UI, guardrails — [scaling-to-production.md](specs-docs/scaling-to-production.md)
 
 Manual step before RAG answers work: place HP PDFs in `rag-docs/` and run the ingest CLI (see [RAG and document corpus](#rag-and-document-corpus)).
 
-## Scaling to production
+For scaling to production (roadmap, ingest pipeline, guardrails, orchestration): [specs-docs/scaling-to-production.md](specs-docs/scaling-to-production.md).
 
-This section tracks how to move from the current Docker Compose dev setup to a production-ready deployment. Items are ordered by impact; evaluate and implement them incrementally.
+## Load & scalability summary
 
-### Current bottlenecks (baseline)
+Locust **Mode A** (`LOAD_TEST=true`, fake agent — no OpenAI cost) validates API/DB/SSE throughput. Methodology and analysis: [specs-docs/locust-stress-test-methodology.md](specs-docs/locust-stress-test-methodology.md).
 
-| Layer            | Limit today                                 | Why                                                         |
-| ---------------- | ------------------------------------------- | ----------------------------------------------------------- |
-| LLM / embeddings | ~tens of concurrent chats                   | OpenAI latency and rate limits dominate each turn           |
-| API process      | 1 uvicorn worker with `--reload`            | Single process; dev-oriented startup                        |
-| DB connections   | Default SQLAlchemy pool (~15)               | Each SSE chat holds a session for the full LLM turn (5–30s) |
-| Event loop       | Sync DB + sync Qdrant inside async handlers | Blocks concurrency during I/O                               |
-| Chat history     | Unbounded load per turn                     | All session messages sent to the LLM on every message       |
-| Audit logs       | `flush()` on every entry                    | Multiple Postgres round-trips per turn before commit        |
+| Scenario | Config | Failures | Throughput |
+| -------- | ------ | -------- | ------------ |
+| Load — 10 users, 30 s | 1 worker, default pool | 0% | — |
+| Stress — 300 users | 1 worker, default pool | **~37%** | DB pool exhausted |
+| Stress — 300 users | 4 workers, tuned pool, `LOAD_TEST=true` | **0%** | **~147 req/s** (~8.8k req/min) |
 
-Rough expectation without changes: **~5–15 simultaneous chat streams** before pool or event-loop saturation. CRUD endpoints (auth, list messages, audit) scale much higher.
+**Fixes applied:** SQLAlchemy pool tuning, `UVICORN_WORKERS=4`, audit log batching (no per-entry flush), `FakeSupportAgent` for isolated infra tests.
 
-### Production checklist
+Mode B (real OpenAI + RAG) was not stress-tested to avoid API cost; the same Locust harness supports it for future provider SLA tests.
 
-#### 1. API runtime
+## Load testing (Locust)
 
-- [ ] Remove `--reload`; run multiple workers in production:
+Load tests live in `load/` and run **against a running API** (Docker Compose or local uvicorn). They are separate from `backend/tests/`.
 
-  ```bash
-  uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-  ```
+### Setup
 
-- [ ] Use a process manager or orchestrator (systemd, Kubernetes, ECS) with health checks on `/api/v1/health`.
-- [ ] Put a reverse proxy (nginx, Caddy, ALB) in front for TLS termination, timeouts, and SSE-friendly buffering (`proxy_buffering off` for chat streams).
+```bash
+python -m venv load/.venv
+source load/.venv/bin/activate
+pip install -r load/requirements.txt
+```
 
-#### 2. Database (PostgreSQL)
+### Mode A — API infra (no OpenAI)
 
-- [ ] Tune the SQLAlchemy engine pool in `core/database.py`:
+Tests login, one fake chat turn (seeds audit logs), and paginated audit log reads.
 
-  ```python
-  create_engine(
-      settings.database_url,
-      pool_size=10,
-      max_overflow=20,
-      pool_pre_ping=True,
-      pool_recycle=1800,
-  )
-  ```
+**Quick path:** `./load/run_locust.sh` starts the backend with 4 workers + tuned pool + fake agent, then runs Locust:
 
-- [ ] Size Postgres `max_connections` to `(workers × pool_size) + headroom` for migrations and admin.
-- [ ] Keep chat DB sessions as short as possible — the SSE handler currently holds one session for the entire LLM turn; consider releasing read queries early or splitting read/write sessions if pool pressure appears under load.
+```bash
+source load/.venv/bin/activate   # after pip install -r load/requirements.txt
+./load/run_locust.sh --headless -u 50 -r 5 -t 5m
+```
 
-#### 3. Audit logging (high ROI, low risk)
+**Manual path:**
 
-- [ ] Remove per-entry `flush()` in `AuditLogRepository.create()` — use `add()` only and commit once at the end of the turn (same transaction as chat messages; see `.cursor/rules/audit-logging.mdc`).
-- [ ] Trim heavy `data` payloads (e.g. full LLM message history on every request) to reduce write volume and disk growth.
-- [ ] Do **not** fire-and-forget audit writes without a separate consistency model — they currently roll back with failed turns.
+1. Enable the fake agent on the backend:
 
-#### 4. Chat and LLM
+   ```bash
+   # In .env at repo root
+   LOAD_TEST=true
+   ```
 
-- [ ] Cap history sent to the LLM (last N messages or token window) in `ChatService.process_message_stream` instead of loading the full session.
-- [ ] Monitor OpenAI rate limits; add retries with backoff and optional request queuing if needed.
-- [ ] Offload sync I/O from the async event loop where it remains sync:
+2. Restart the backend (optionally with load overrides):
 
-  ```python
-  await asyncio.to_thread(self._vector_repository.search, ...)
-  ```
+   ```bash
+   LOAD_TEST=true UVICORN_WORKERS=4 docker compose up -d --build backend
+   ```
 
-- [ ] Longer term: migrate to async SQLAlchemy or run all sync DB work via `asyncio.to_thread()`.
+3. Run Locust:
 
-#### 5. Vector search (Qdrant)
+   ```bash
+   locust -f load/locustfile.py --host http://localhost:8000
+   ```
 
-- [ ] Qdrant runs as a separate service — scale it independently; the API only needs a stable `QDRANT_URL`.
-- [ ] Wrap sync `VectorRepository` calls in `asyncio.to_thread()` inside async tool/agent paths to avoid blocking other requests.
-- [ ] Ingest stays offline via CLI — no change needed for chat throughput.
+   Headless example (50 users, 5 min):
 
-#### 6. Frontend
+   ```bash
+   locust -f load/locustfile.py --host http://localhost:8000 \
+     --headless -u 50 -r 5 -t 5m
+   ```
 
-- [ ] Serve a static production build (`npm run build`) via nginx or CDN, not the Vite dev server.
-- [ ] Set `VITE_API_URL` to the public API origin (HTTPS).
-- [ ] Optional: virtualize long message lists if sessions grow very large; pagination already covers older history.
+   Mode is selected via `LOAD_MODE` env var (default `A`). Do not pass `--tags`.
 
-#### 7. Observability and safety
+Full stress-test process: [specs-docs/locust-stress-test-methodology.md](specs-docs/locust-stress-test-methodology.md). Production roadmap: [specs-docs/scaling-to-production.md](specs-docs/scaling-to-production.md).
 
-- [ ] Structured logging (JSON) with `turn_id`, `session_id`, and latency fields.
-- [ ] Metrics: request rate, SSE duration, pool checkout time, OpenAI errors, Qdrant latency.
-- [ ] Rate limiting per user/IP on chat endpoints (slowapi, nginx, or API gateway).
-- [ ] Secrets via env / secret manager — never bake `JWT_SECRET` or `OPENAI_API_KEY` into images.
+### Mode B — real agent (OpenAI + RAG)
 
-#### 8. Load testing (required by project spec)
+Tests full chat SSE turns with latency metrics (`turn_complete`, `time_to_first_token`).
 
-- [ ] Add load tests (Locust or k6) targeting realistic chat flows, not just health checks.
-- [ ] Measure **concurrent SSE streams** and **requests per minute** under steady load.
-- [ ] Record baseline numbers here once runs are complete:
+1. Ensure `LOAD_TEST=false` and `OPENAI_API_KEY` is set in `.env`.
+2. Ingest PDFs: `docker compose exec backend python -m app.scripts.ingest_documents`
+3. Run Locust (start with few users — each turn calls OpenAI):
 
-  | Scenario                      | Target | Result |
-  | ----------------------------- | ------ | ------ |
-  | Health `GET /api/v1/health`   | —      | —      |
-  | Auth login                    | —      | —      |
-  | Chat SSE (1 user, sustained)  | —      | —      |
-  | Chat SSE (N concurrent users) | —      | —      |
+   ```bash
+   LOAD_MODE=B locust -f load/locustfile.py --host http://localhost:8000 \
+     --headless -u 5 -r 1 -t 5m
+   ```
 
-### Suggested rollout order
+   Not run in this project (OpenAI cost). Use for provider SLA checks with low user count when needed.
 
-1. Production uvicorn workers + static frontend build + reverse proxy
-2. DB pool tuning + remove audit `flush()` per entry
-3. Cap LLM chat history
-4. `asyncio.to_thread()` for sync DB/Qdrant in async paths
-5. Load tests and document results in the table above
-6. Rate limiting, metrics, and autoscaling only if load tests show need
+### Troubleshooting
 
-### Horizontal scaling notes
-
-The API is stateless (JWT auth, no in-memory sessions). You can run **multiple backend replicas** behind a load balancer as long as:
-
-- All instances share the same PostgreSQL and Qdrant
-- SSE connections use sticky sessions **or** each stream stays on one instance (standard for long-lived connections)
-- OpenAI quota is shared across replicas — watch global rate limits
+| Symptom | Cause | Fix |
+| ------- | ----- | --- |
+| 100% failures on `users [register]`, 0 bytes response | API not running | `docker compose up -d` — Locust aborts early if `/health` is unreachable |
+| 100% failures on register, HTTP 422 | Invalid email domain | Use `@example.com` (not `@loadtest.local`) — already fixed in `locustfile.py` |
+| `Connection refused` mid-test | Backend crashed under load | Check `docker compose logs backend`; reduce users/spawn rate; restart backend |
+| Seed SSE fails in Mode A | `LOAD_TEST` not enabled | Set `LOAD_TEST=true` in `.env` and `docker compose up -d --build backend` |

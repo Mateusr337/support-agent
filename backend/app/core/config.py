@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     qdrant_collection: str = "support_documents"
     documents_dir: str = ""
+    load_test: bool = False
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+    db_pool_recycle: int = 1800
 
     @property
     def resolved_documents_dir(self) -> Path:

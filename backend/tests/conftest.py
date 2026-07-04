@@ -15,21 +15,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.agents.fake_support_agent import FAKE_AGENT_REPLY, FakeSupportAgent
 from app.api.v1.dependencies import get_support_agent
 from app.core.database import Base, get_db
 from app.main import app
 from app.models import ChatMessage, ChatSession, User  # noqa: F401
-
-FAKE_AGENT_REPLY = "Thanks for your message. A support agent will help you shortly."
-
-
-class FakeSupportAgent:
-    async def reply(self, user_message: str, history=None, **kwargs) -> str:
-        return FAKE_AGENT_REPLY
-
-    async def reply_stream(self, user_message: str, history=None, **kwargs):
-        yield {"type": "token", "content": FAKE_AGENT_REPLY}
-
 
 @pytest.fixture(autouse=True)
 def block_real_openai_api_calls():

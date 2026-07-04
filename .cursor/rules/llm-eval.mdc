@@ -1,6 +1,6 @@
 ---
 description: LLM quality benchmark conventions (DeepEval, outside pytest/coverage)
-globs: backend/eval/**,backend/app/scripts/run_deepeval.py,usecases/agent-manual-tests.md
+globs: backend/eval/**,backend/app/scripts/run_deepeval.py,specs-docs/agent-manual-tests.md
 alwaysApply: false
 ---
 
@@ -18,14 +18,14 @@ Standalone benchmark for LLM response quality. **Not** part of pytest or coverag
 | `backend/eval/run_deepeval.py` | CLI logic and JSON report |
 | `backend/eval/cleanup.py` | Delete eval users from Postgres (cascade) |
 | `backend/app/scripts/run_deepeval.py` | Thin entry point only |
-| `usecases/agent-manual-tests.md` | Human-readable spec for all 10 cases |
+| `specs-docs/agent-manual-tests.md` | Human-readable spec for all 10 cases |
 
 ## Isolation rules
 
 - Keep all eval code in `backend/eval/` — never under `app/` except the thin script wrapper.
 - Do **not** add eval tests to `tests/` or register eval in `pytest.ini`.
 - Do **not** add DeepEval to `requirements.txt` (Docker prod image); dev only in `requirements-dev.txt`.
-- Generated artifacts (`eval_report.json`, `.deepeval/`) are gitignored.
+- `backend/eval_report.json` is committed as the latest benchmark snapshot (update and commit after re-runs). `.deepeval/` cache remains gitignored.
 
 ## Running
 
@@ -47,7 +47,7 @@ cd backend && python -c "from eval.cleanup import delete_stale_eval_users; print
 
 ## Adding a new case
 
-1. Add the scenario to `usecases/agent-manual-tests.md` (question, expected source, pass criteria).
+1. Add the scenario to `specs-docs/agent-manual-tests.md` (question, expected source, pass criteria).
 2. Append an `EvalCase` to `EVAL_CASES` in `backend/eval/dataset.py`.
 3. Register metrics in `backend/eval/metrics.py` via `_METRICS_BY_CASE`.
 4. Re-run the benchmark and update the results table in `README.md`.
