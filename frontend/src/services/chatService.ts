@@ -1,11 +1,8 @@
-import type {
-  ChatMessageResponse,
-  ChatMessagesPageResponse,
-  ChatSessionResponse,
-  SendMessageApiResponse,
-} from "../types/api/chat";
-import type { ChatMessage, SendMessageResult } from "../types/chat";
-import { apiRequest } from "./api";
+import type { ChatMessageResponse, ChatMessagesPageResponse, ChatSessionResponse } from "../types/api/chat";
+import type { ChatMessage, ChatStreamEvent } from "../types/chat";
+import { API_URL } from "../lib/env";
+import { getToken } from "../lib/authStorage";
+import { ApiError } from "./api";
 
 export const PAGE_SIZE = 20;
 
@@ -23,9 +20,33 @@ export interface GetSessionMessagesOptions {
   offset?: number;
 }
 
+function parseSseBlock(block: string): ChatStreamEvent | null {
+  const dataLine = block
+    .split("\n")
+    .find((line) => line.startsWith("data: "));
+
+  if (!dataLine) {
+    return null;
+  }
+
+  return JSON.parse(dataLine.slice(6)) as ChatStreamEvent;
+}
+
 export const chatService = {
   async getOrCreateActiveSession(): Promise<ChatSessionResponse> {
-    return apiRequest<ChatSessionResponse>("/api/v1/chat/conversations/active");
+    const token = getToken();
+    const response = await fetch(`${API_URL}/api/v1/chat/conversations/active`, {
+      headers: {
+        Accept: "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, response.statusText);
+    }
+
+    return response.json() as Promise<ChatSessionResponse>;
   },
 
   async getSessionMessages(
@@ -37,33 +58,102 @@ export const chatService = {
       params.set("offset", String(offset));
     }
 
-    return apiRequest<ChatMessagesPageResponse>(
-      `/api/v1/chat/conversations/${sessionId}/messages?${params}`,
-    );
-  },
-
-  async sendMessage(
-    sessionId: string,
-    content: string,
-  ): Promise<SendMessageResult> {
-    const result = await apiRequest<SendMessageApiResponse>(
-      `/api/v1/chat/conversations/${sessionId}/messages`,
+    const token = getToken();
+    const response = await fetch(
+      `${API_URL}/api/v1/chat/conversations/${sessionId}/messages?${params}`,
       {
-        method: "POST",
-        body: { content },
+        headers: {
+          Accept: "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       },
     );
 
-    return {
-      user_message: mapMessage(result.user_message),
-      assistant_message: mapMessage(result.assistant_message),
-    };
+    if (!response.ok) {
+      throw new ApiError(response.status, response.statusText);
+    }
+
+    return response.json() as Promise<ChatMessagesPageResponse>;
+  },
+
+  async sendMessageStream(
+    sessionId: string,
+    content: string,
+    onEvent: (event: ChatStreamEvent) => void,
+  ): Promise<void> {
+    const token = getToken();
+    const response = await fetch(
+      `${API_URL}/api/v1/chat/conversations/${sessionId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "text/event-stream",
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ content }),
+      },
+    );
+
+    if (!response.ok) {
+      let detail: string | undefined;
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        const payload = (await response.json()) as { detail?: string };
+        detail = typeof payload.detail === "string" ? payload.detail : undefined;
+      }
+      throw new ApiError(response.status, detail ?? response.statusText, detail);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new ApiError(500, "Streaming response body is unavailable");
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() ?? "";
+
+      for (const block of blocks) {
+        const event = parseSseBlock(block);
+        if (event) {
+          onEvent(event);
+        }
+      }
+    }
+
+    if (buffer.trim()) {
+      const event = parseSseBlock(buffer);
+      if (event) {
+        onEvent(event);
+      }
+    }
   },
 
   async reloadSession(): Promise<ChatSessionResponse> {
-    return apiRequest<ChatSessionResponse>("/api/v1/chat/conversations/reload", {
+    const token = getToken();
+    const response = await fetch(`${API_URL}/api/v1/chat/conversations/reload`, {
       method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
     });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, response.statusText);
+    }
+
+    return response.json() as Promise<ChatSessionResponse>;
   },
 
   mapMessages(apiMessages: ChatMessageResponse[]): ChatMessage[] {

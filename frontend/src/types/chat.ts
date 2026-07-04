@@ -7,9 +7,17 @@ export interface ChatMessage {
   createdAt: string;
 }
 
-export interface SendMessageResult {
-  user_message: ChatMessage;
-  assistant_message: ChatMessage;
+export type ChatStreamEvent =
+  | { type: "turn_started"; turn_id: string }
+  | { type: "tool_call"; name: string }
+  | { type: "token"; content: string }
+  | { type: "done"; assistant_message_id: number; content: string }
+  | { type: "error"; message: string };
+
+export interface StreamingState {
+  turnId: string;
+  tool: string | null;
+  content: string;
 }
 
 export interface UseChatReturn {
@@ -18,6 +26,7 @@ export interface UseChatReturn {
   loadingOlder: boolean;
   hasMoreOlder: boolean;
   sending: boolean;
+  streaming: StreamingState | null;
   reloadingSession: boolean;
   error: string;
   sendMessage: (content: string) => Promise<void>;

@@ -20,11 +20,6 @@ export interface ChatMessagesPageResponse {
   has_more: boolean;
 }
 
-export interface SendMessageApiResponse {
-  user_message: ChatMessageResponse;
-  assistant_message: ChatMessageResponse;
-}
-
 export interface SendMessageRequest {
   content: string;
 }

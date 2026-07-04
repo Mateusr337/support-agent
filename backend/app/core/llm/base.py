@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import UUID
@@ -40,3 +41,14 @@ class LLMProvider(Protocol):
         user_id: int | None = None,
         turn_id: UUID | None = None,
     ) -> ChatCompletion: ...
+
+    def chat_stream(
+        self,
+        messages: list[Message],
+        *,
+        temperature: float = 0.2,
+        audit_log: "AuditLogService | None" = None,
+        session_id: UUID | None = None,
+        user_id: int | None = None,
+        turn_id: UUID | None = None,
+    ) -> AsyncIterator[str]: ...

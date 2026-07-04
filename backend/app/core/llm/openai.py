@@ -1,4 +1,5 @@
 import json
+from collections.abc import AsyncIterator
 from uuid import UUID
 
 from openai import AsyncOpenAI
@@ -98,6 +99,85 @@ class OpenAILLMProvider:
             )
 
         return completion
+
+    async def chat_stream(
+        self,
+        messages: list[Message],
+        *,
+        temperature: float = 0.2,
+        audit_log: AuditLogService | None = None,
+        session_id: UUID | None = None,
+        user_id: int | None = None,
+        turn_id: UUID | None = None,
+    ) -> AsyncIterator[str]:
+        history = [self._to_openai_message(message) for message in messages]
+
+        self._audit_info(
+            audit_log,
+            session_id=session_id,
+            user_id=user_id,
+            turn_id=turn_id,
+            type="Agent",
+            message="LLM stream request",
+            data={
+                "model": self._model,
+                "temperature": temperature,
+                "message_count": len(messages),
+                "messages": history,
+            },
+        )
+
+        stream = await self._client.chat.completions.create(
+            model=self._model,
+            messages=history,
+            temperature=temperature,
+            stream=True,
+            stream_options={"include_usage": True},
+        )
+
+        content_parts: list[str] = []
+        usage = None
+        async for chunk in stream:
+            if chunk.choices:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    content_parts.append(delta)
+                    yield delta
+            if chunk.usage is not None:
+                usage = chunk.usage
+
+        content = "".join(content_parts)
+        if not content:
+            raise RuntimeError("OpenAI returned an empty streamed response")
+
+        self._audit_info(
+            audit_log,
+            session_id=session_id,
+            user_id=user_id,
+            turn_id=turn_id,
+            type="Agent",
+            message="LLM stream response",
+            data={
+                "model": self._model,
+                "content": content,
+            },
+        )
+
+        if usage is not None:
+            self._audit_info(
+                audit_log,
+                session_id=session_id,
+                user_id=user_id,
+                turn_id=turn_id,
+                type="Token Usage",
+                message="LLM token usage",
+                data={
+                    "model": self._model,
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens,
+                },
+            )
 
     def _to_openai_message(self, message: Message) -> dict:
         payload: dict = {"role": message.role, "content": message.content}

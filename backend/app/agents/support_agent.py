@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from uuid import UUID
 
 from app.agents.base import AgentConfig
@@ -23,6 +24,31 @@ class SupportAgent:
         user_id: int | None = None,
         audit_log: AuditLogService | None = None,
     ) -> str:
+        parts: list[str] = []
+        async for event in self.reply_stream(
+            user_message,
+            history=history,
+            temperature=temperature,
+            turn_id=turn_id,
+            session_id=session_id,
+            user_id=user_id,
+            audit_log=audit_log,
+        ):
+            if event["type"] == "token":
+                parts.append(event["content"])
+        return "".join(parts)
+
+    async def reply_stream(
+        self,
+        user_message: str,
+        history: list[Message] | None = None,
+        *,
+        temperature: float = 0.2,
+        turn_id: UUID | None = None,
+        session_id: UUID | None = None,
+        user_id: int | None = None,
+        audit_log: AuditLogService | None = None,
+    ) -> AsyncIterator[dict]:
         tool_context = ToolContext(
             turn_id=turn_id,
             session_id=session_id,
@@ -31,8 +57,21 @@ class SupportAgent:
         )
         tool_definitions = [self._tools[name].definition for name in self._config.tools]
         messages = self._build_messages(user_message, history or [])
+        used_tools = False
 
         for _ in range(self._config.max_tool_loop_iterations):
+            if used_tools:
+                async for token in self._llm.chat_stream(
+                    messages,
+                    temperature=temperature,
+                    audit_log=audit_log,
+                    session_id=session_id,
+                    user_id=user_id,
+                    turn_id=turn_id,
+                ):
+                    yield {"type": "token", "content": token}
+                return
+
             completion = await self._llm.chat(
                 messages,
                 temperature=temperature,
@@ -44,6 +83,7 @@ class SupportAgent:
             )
 
             if completion.tool_calls:
+                used_tools = True
                 messages.append(
                     Message(
                         role="assistant",
@@ -52,6 +92,7 @@ class SupportAgent:
                     )
                 )
                 for tool_call in completion.tool_calls:
+                    yield {"type": "tool_call", "name": tool_call.name}
                     messages.append(
                         Message(
                             role="tool",
@@ -62,7 +103,8 @@ class SupportAgent:
                 continue
 
             if completion.content:
-                return completion.content
+                yield {"type": "token", "content": completion.content}
+                return
 
             raise RuntimeError("LLM returned an empty response")
 

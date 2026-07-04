@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -34,6 +35,14 @@ class ChatService:
         self._session_repository = ChatSessionRepository(db)
         self._message_repository = ChatMessageRepository(db)
         self._audit_log = AuditLogService(db)
+
+    def ensure_session_active(self, session_id: UUID, user_id: int) -> ChatSession:
+        session = self._session_repository.get_by_id_and_user_id(session_id, user_id)
+        if session is None:
+            raise ChatSessionNotFoundError("Chat session not found")
+        if session.finalized_at is not None:
+            raise ChatSessionFinalizedError("Chat session is finalized")
+        return session
 
     def create_session(self, user_id: int) -> ChatSession:
         try:
@@ -76,27 +85,24 @@ class ChatService:
             offset=offset,
         )
 
-    async def process_message(
+    async def process_message_stream(
         self,
         session_id: UUID,
         user_id: int,
         content: str,
-    ) -> ProcessMessageResult:
-        session = self._session_repository.get_by_id_and_user_id(session_id, user_id)
-        if session is None:
-            raise ChatSessionNotFoundError("Chat session not found")
+    ) -> AsyncIterator[dict]:
+        session = self.ensure_session_active(session_id, user_id)
+        turn_id = uuid4()
 
-        if session.finalized_at is not None:
-            raise ChatSessionFinalizedError("Chat session is finalized")
+        yield {"type": "turn_started", "turn_id": str(turn_id)}
 
         try:
             session.updated_at = datetime.now(UTC)
 
             prior_messages, _ = self._message_repository.list_by_session_id(session_id)
             history = self._to_llm_history(prior_messages)
-            turn_id = uuid4()
 
-            user_message = self._message_repository.create(
+            self._message_repository.create(
                 chat_session_id=session_id,
                 user_id=user_id,
                 role="user",
@@ -110,14 +116,21 @@ class ChatService:
                 message="Processing user message",
                 data={"content": content},
             )
-            reply = await self._agent.reply(
+
+            reply_parts: list[str] = []
+            async for event in self._agent.reply_stream(
                 content,
                 history=history,
                 turn_id=turn_id,
                 session_id=session_id,
                 user_id=user_id,
                 audit_log=self._audit_log,
-            )
+            ):
+                if event["type"] == "token":
+                    reply_parts.append(event["content"])
+                yield event
+
+            reply = "".join(reply_parts)
             self._audit_log.info(
                 session_id=session_id,
                 user_id=user_id,
@@ -133,12 +146,13 @@ class ChatService:
                 content=reply,
             )
             self._db.commit()
-            self._db.refresh(user_message)
             self._db.refresh(assistant_message)
-            return ProcessMessageResult(
-                user_message=user_message,
-                assistant_message=assistant_message,
-            )
+
+            yield {
+                "type": "done",
+                "assistant_message_id": assistant_message.id,
+                "content": reply,
+            }
         except Exception:
             self._db.rollback()
             raise

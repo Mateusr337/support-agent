@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     def resolved_documents_dir(self) -> Path:
         if self.documents_dir.strip():
             return Path(self.documents_dir)
-        return BASE_DIR.parent / "documents"
+        return BASE_DIR.parent / "rag-docs"
 
     @property
     def cors_origin_list(self) -> list[str]:

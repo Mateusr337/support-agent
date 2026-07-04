@@ -86,6 +86,8 @@ Page → feature component/hook → service → backend API
                 ↘ components/ui (presentational)
 ```
 
+Chat send message uses **SSE** (`chatService.sendMessageStream`) — not JSON. See `docs/chat-sse-streaming.md` and `.cursor/rules/chat-sse-streaming.mdc`.
+
 ## TypeScript requirements
 
 1. **All source files use `.ts` / `.tsx`** — no new `.js` / `.jsx` in `src/`

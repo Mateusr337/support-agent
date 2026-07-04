@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ChatMessage } from "../../../types/chat";
+import type { ChatMessage, StreamingState } from "../../../types/chat";
 import Spinner from "../../../components/ui/Spinner";
 import "./MessageList.css";
 
@@ -24,6 +24,47 @@ function MessageBubble({ message }: MessageBubbleProps) {
   );
 }
 
+function toolStatusLabel(toolName: string): string {
+  if (toolName === "search_documents") {
+    return "Searching documents…";
+  }
+  return `Running ${toolName}…`;
+}
+
+interface StreamingBubbleProps {
+  streaming: StreamingState;
+}
+
+function StreamingBubble({ streaming }: StreamingBubbleProps) {
+  const showStatus = streaming.tool !== null && streaming.content.length === 0;
+
+  return (
+    <div className="message-row message-row-bot">
+      <div className="message-avatar" aria-hidden="true">
+        HP
+      </div>
+      <div className="message-bubble message-bubble-bot">
+        {showStatus && (
+          <p className="message-stream-status" role="status">
+            {toolStatusLabel(streaming.tool!)}
+          </p>
+        )}
+        {streaming.content.length > 0 ? (
+          <p>{streaming.content}</p>
+        ) : (
+          !showStatus && (
+            <div className="message-typing" aria-label="Assistant is typing">
+              <span />
+              <span />
+              <span />
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface ScrollRestoreState {
   scrollHeight: number;
   scrollTop: number;
@@ -32,6 +73,7 @@ interface ScrollRestoreState {
 interface MessageListProps {
   messages: ChatMessage[];
   sending: boolean;
+  streaming: StreamingState | null;
   loadingOlder?: boolean;
   hasMoreOlder?: boolean;
   onLoadOlder?: () => void;
@@ -44,6 +86,7 @@ function scrollToBottom(el: HTMLElement): void {
 export default function MessageList({
   messages,
   sending,
+  streaming,
   loadingOlder = false,
   hasMoreOlder = false,
   onLoadOlder,
@@ -89,10 +132,10 @@ export default function MessageList({
       return;
     }
 
-    if ((appendedAtBottom || sending) && !loadingOlder) {
+    if ((appendedAtBottom || sending || streaming) && !loadingOlder) {
       scrollToBottom(list);
     }
-  }, [messages, sending, loadingOlder]);
+  }, [messages, sending, streaming, loadingOlder]);
 
   useEffect(() => {
     if (!canLoadOlder || loadingOlder || !hasMoreOlder || !onLoadOlder) {
@@ -144,18 +187,7 @@ export default function MessageList({
         <MessageBubble key={message.id} message={message} />
       ))}
 
-      {sending && (
-        <div className="message-row message-row-bot">
-          <div className="message-avatar" aria-hidden="true">
-            HP
-          </div>
-          <div className="message-bubble message-bubble-bot message-typing">
-            <span />
-            <span />
-            <span />
-          </div>
-        </div>
-      )}
+      {streaming && <StreamingBubble streaming={streaming} />}
     </div>
   );
 }

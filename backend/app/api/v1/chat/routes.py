@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 
 from app.api.v1.auth.dependencies import get_current_user
 from app.api.v1.chat.schemas import (
@@ -8,7 +9,6 @@ from app.api.v1.chat.schemas import (
     ChatMessageResponse,
     ChatSessionResponse,
     SendMessageRequest,
-    SendMessageResponse,
 )
 from app.api.v1.dependencies import get_chat_service
 from app.api.v1.responses import (
@@ -18,6 +18,7 @@ from app.api.v1.responses import (
     VALIDATION_ERROR_RESPONSE,
     merge_responses,
 )
+from app.core.streaming.sse import SSE_HEADERS, format_sse
 from app.models.user import User
 from app.services.chat_service import (
     ChatService,
@@ -47,8 +48,8 @@ def create_conversation(
     status_code=status.HTTP_201_CREATED,
     response_model=ChatSessionResponse,
     responses=merge_responses(
-        UNAUTHORIZED_RESPONSE, 
-        NOT_FOUND_RESPONSE, 
+        UNAUTHORIZED_RESPONSE,
+        NOT_FOUND_RESPONSE,
         BAD_REQUEST_RESPONSE,
         VALIDATION_ERROR_RESPONSE,
     ),
@@ -120,8 +121,7 @@ def list_messages(
 
 @router.post(
     "/{session_id}/messages",
-    status_code=status.HTTP_201_CREATED,
-    response_model=SendMessageResponse,
+    status_code=status.HTTP_200_OK,
     responses=merge_responses(
         UNAUTHORIZED_RESPONSE,
         NOT_FOUND_RESPONSE,
@@ -134,13 +134,9 @@ async def send_message(
     body: SendMessageRequest,
     current_user: User = Depends(get_current_user),
     service: ChatService = Depends(get_chat_service),
-) -> SendMessageResponse:
+) -> StreamingResponse:
     try:
-        result = await service.process_message(
-            session_id=session_id,
-            user_id=current_user.id,
-            content=body.content,
-        )
+        service.ensure_session_active(session_id, current_user.id)
     except ChatSessionNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -152,7 +148,19 @@ async def send_message(
             detail=str(exc),
         ) from exc
 
-    return SendMessageResponse(
-        user_message=result.user_message,
-        assistant_message=result.assistant_message,
+    async def event_generator():
+        try:
+            async for event in service.process_message_stream(
+                session_id=session_id,
+                user_id=current_user.id,
+                content=body.content,
+            ):
+                yield format_sse(event)
+        except Exception as exc:
+            yield format_sse({"type": "error", "message": str(exc)})
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers=SSE_HEADERS,
     )

@@ -13,7 +13,7 @@ Pattern: **Service + Repository** (similar to NestJS/Express with an isolated da
 ## Design principles
 
 - **RAG is infrastructure for knowledge** — ingest and search live in `rag/`; no agent or HTTP logic.
-- **Document corpus is external data** — PDFs live in repo-root `documents/`; agents never read that folder.
+- **Document corpus is external data** — PDFs live in repo-root `rag-docs/`; agents never read that folder.
 - **Ingest is manual and offline** — run via CLI only; not on Docker build or container startup.
 - **Tools expose capabilities** — reusable, independent of any single agent.
 - **Agents compose capabilities** — prompts + LLM loop + assigned tools via registry.
@@ -27,11 +27,12 @@ Legend: no marker = implemented; `(planned)` = defined, not yet created; `(tempo
 
 ```
 support-agent/
-├── documents/                      # HP PDF corpus — see Document corpus
+├── rag-docs/                       # HP PDF corpus — see Document corpus
 │   └── *.pdf
 ├── backend/                        # FastAPI app — see Backend layout
 ├── frontend/                       # React SPA — see frontend-architecture.mdc
-├── docker-compose.yml              # mounts ./documents → /app/documents:ro
+├── docs/                           # Feature documentation (e.g. chat-sse-streaming.md)
+├── docker-compose.yml              # mounts ./rag-docs → /app/rag-docs:ro
 ├── .env.example                    # Compose env (copy to .env)
 └── .cursor/rules/                  # Architecture conventions
 ```
@@ -148,7 +149,7 @@ Services instantiate repos in `__init__`; routes never touch repos directly.
 
 ### Services
 
-Domain orchestration and transactions: `user`, `chat`, `audit_log`, `health`. Chat service wires the support agent; none of them read `documents/` or Qdrant vectors directly.
+Domain orchestration and transactions: `user`, `chat`, `audit_log`, `health`. Chat service wires the support agent; none of them read `rag-docs/` or Qdrant vectors directly.
 
 ### Ingest CLI
 
@@ -232,11 +233,11 @@ No `rag/retriever.py` — search is consumed via `RagService` and exposed as a t
 
 | Location | Path | Purpose |
 |----------|------|---------|
-| Host (repo root) | `documents/` | Place HP PDF files here |
-| Docker (backend container) | `/app/documents` | Read-only volume mount of `./documents` |
-| Local backend dev | `../documents` (default via `DOCUMENTS_DIR`) | Same folder, resolved from `backend/` |
+| Host (repo root) | `rag-docs/` | Place HP PDF files here |
+| Docker (backend container) | `/app/rag-docs` | Read-only volume mount of `./rag-docs` |
+| Local backend dev | `../rag-docs` (default via `DOCUMENTS_DIR`) | Same folder, resolved from `backend/` |
 
-Env var: `DOCUMENTS_DIR` — optional override; defaults to repo-root `documents/` when unset (see `config.resolved_documents_dir`).
+Env var: `DOCUMENTS_DIR` — optional override; defaults to repo-root `rag-docs/` when unset (see `config.resolved_documents_dir`).
 
 PDFs are **not** copied into the Docker image. Qdrant vectors persist in the `qdrant_data` Compose volume after ingest.
 
@@ -283,7 +284,17 @@ class AgentConfig:
 
 ## Request flow
 
-**Current (chat + LLM, RAG pending):**
+**Current (chat + LLM + SSE):**
+
+```
+Client → api/v1/chat (SSE) → ChatService.process_message_stream → repositories → PostgreSQL
+                              ↘ agents/support_agent.reply_stream → core/llm/
+                                                                    ↘ tools/ (search_documents)
+```
+
+See `.cursor/rules/chat-sse-streaming.mdc` and `docs/chat-sse-streaming.md`.
+
+**Legacy diagram (RAG pending):**
 
 ```
 Client → api/v1/chat → ChatService → repositories → PostgreSQL
@@ -305,7 +316,7 @@ Client → api/v1/chat → ChatService → repositories → PostgreSQL
 **Ingest (offline, manual):**
 
 ```
-documents/*.pdf
+rag-docs/*.pdf
   → CLI: python -m app.scripts.ingest_documents
   → rag/service.ingest_directory(DOCUMENTS_DIR)
   → load → chunk → embed → vector_repository.upsert

@@ -1,0 +1,62 @@
+---
+description: Chat SSE streaming contract, layers, and change conventions
+globs: backend/app/core/streaming/**,backend/app/api/v1/chat/**,backend/app/services/chat_service.py,backend/app/agents/support_agent.py,backend/app/core/llm/**,frontend/src/features/chat/**,frontend/src/services/chatService.ts,frontend/src/types/chat.ts,docs/chat-sse-streaming.md
+alwaysApply: false
+---
+
+# Chat SSE Streaming
+
+Full reference: [`docs/chat-sse-streaming.md`](../docs/chat-sse-streaming.md)
+
+Chat message submission uses **Server-Sent Events (SSE)**, not a blocking JSON response. The client renders the user message optimistically; the server streams turn progress and assistant tokens only.
+
+## Event contract (do not break without updating docs + tests)
+
+```typescript
+type ChatStreamEvent =
+  | { type: "turn_started"; turn_id: string }
+  | { type: "tool_call"; name: string }
+  | { type: "token"; content: string }
+  | { type: "done"; assistant_message_id: number; content: string }
+  | { type: "error"; message: string };
+```
+
+Wire format: `event: message` + `data: {json}` (discriminate by JSON `type`).
+
+**Not streamed:** `user_message` — persisted server-side; shown optimistically on the client.
+
+## Layer responsibilities
+
+| Layer | Role |
+| ----- | ---- |
+| `app/core/streaming/sse.py` | `format_sse()`, shared SSE headers |
+| `app/api/v1/chat/routes.py` | `StreamingResponse`; validate session **before** stream (404/400 HTTP) |
+| `app/services/chat_service.py` | `process_message_stream()` — `turn_started`, persist messages, `done` |
+| `app/agents/support_agent.py` | `reply_stream()` — `tool_call`, `token` |
+| `app/core/llm/` | `chat()` for tool turns; `chat_stream()` for final answer tokens |
+| `frontend/src/services/chatService.ts` | `fetch` + SSE parser (not `EventSource` — JWT POST) |
+| `frontend/src/features/chat/` | `streaming` state, draft bubble UI |
+
+## Hybrid streaming rule
+
+| Agent turn | LLM method | SSE events |
+| ---------- | ---------- | ---------- |
+| May call tools | `chat()` blocking | `tool_call` per tool |
+| Direct answer (no tools) | `chat()` then emit content as one `token` | `token` |
+| Final answer after tools | `chat_stream()` | `token` deltas |
+
+**Never** expose raw OpenAI chunk events to the frontend. Map provider output inside `OpenAILLMProvider`.
+
+## When changing this feature
+
+1. Update [`docs/chat-sse-streaming.md`](../docs/chat-sse-streaming.md) if the contract or flow changes.
+2. Update `ChatStreamEvent` in `frontend/src/types/chat.ts` and backend event payloads together.
+3. Add/adjust tests: `tests/api/test_chat.py`, `tests/unit/services/test_chat_service.py`, `tests/unit/agents/test_support_agent.py`.
+4. Keep audit logging separate — SSE is UX; audit logs use the same `turn_id` from `turn_started`.
+
+## Do not
+
+- Reintroduce a JSON body response on `POST .../messages` without explicit product decision.
+- Emit provider-specific event names to the client.
+- Persist a partial assistant message if the client disconnects mid-stream.
+- Use `EventSource` on the frontend (no POST + Bearer support).

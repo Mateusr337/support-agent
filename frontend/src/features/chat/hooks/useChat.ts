@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage, UseChatReturn } from "../../../types/chat";
+import type { ChatMessage, ChatStreamEvent, StreamingState, UseChatReturn } from "../../../types/chat";
 import { ApiError } from "../../../services/api";
 import { chatService, PAGE_SIZE } from "../../../services/chatService";
 
@@ -18,6 +18,7 @@ export function useChat(): UseChatReturn {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
+  const [streaming, setStreaming] = useState<StreamingState | null>(null);
   const [reloadingSession, setReloadingSession] = useState(false);
   const [error, setError] = useState("");
   const loadingOlderRef = useRef(false);
@@ -101,6 +102,44 @@ export function useChat(): UseChatReturn {
     }
   }, [sessionId, hasMoreOlder, messages]);
 
+  const handleStreamEvent = useCallback(
+    (event: ChatStreamEvent, optimisticId: string) => {
+      switch (event.type) {
+        case "turn_started":
+          setStreaming({ turnId: event.turn_id, tool: null, content: "" });
+          break;
+        case "tool_call":
+          setStreaming((current) =>
+            current ? { ...current, tool: event.name } : current
+          );
+          break;
+        case "token":
+          setStreaming((current) =>
+            current ? { ...current, content: current.content + event.content } : current
+          );
+          break;
+        case "done":
+          setMessages((current) => [
+            ...current,
+            {
+              id: String(event.assistant_message_id),
+              role: "assistant",
+              content: event.content,
+              createdAt: new Date().toISOString(),
+            },
+          ]);
+          setStreaming(null);
+          break;
+        case "error":
+          setMessages((current) => current.filter((message) => message.id !== optimisticId));
+          setStreaming(null);
+          setError(event.message);
+          break;
+      }
+    },
+    []
+  );
+
   const sendMessage = useCallback(
     async (content: string) => {
       const trimmed = content.trim();
@@ -125,13 +164,12 @@ export function useChat(): UseChatReturn {
       setError("");
 
       try {
-        const result = await chatService.sendMessage(sessionId, trimmed);
-        setMessages((current) => {
-          const withoutOptimistic = current.filter((message) => message.id !== optimisticId);
-          return [...withoutOptimistic, result.user_message, result.assistant_message];
+        await chatService.sendMessageStream(sessionId, trimmed, (event) => {
+          handleStreamEvent(event, optimisticId);
         });
       } catch (err) {
         setMessages((current) => current.filter((message) => message.id !== optimisticId));
+        setStreaming(null);
         setError(
           err instanceof ApiError
             ? err.message
@@ -141,7 +179,7 @@ export function useChat(): UseChatReturn {
         setSending(false);
       }
     },
-    [sessionId, sending]
+    [sessionId, sending, handleStreamEvent]
   );
 
   const reloadSession = useCallback(async (): Promise<boolean> => {
@@ -157,6 +195,7 @@ export function useChat(): UseChatReturn {
       setSessionId(session.id);
       setMessages([WELCOME_MESSAGE]);
       setHasMoreOlder(false);
+      setStreaming(null);
       return true;
     } catch (err) {
       setError(
@@ -176,6 +215,7 @@ export function useChat(): UseChatReturn {
     loadingOlder,
     hasMoreOlder,
     sending,
+    streaming,
     reloadingSession,
     error,
     sendMessage,

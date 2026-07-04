@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -22,6 +23,11 @@ class FakeSupportAgent:
         self.last_user_message: str | None = None
         self.last_history: list[Message] | None = None
 
+    async def reply_stream(self, user_message: str, history=None, **kwargs):
+        self.last_user_message = user_message
+        self.last_history = history
+        yield {"type": "token", "content": self._reply}
+
     async def reply(self, user_message: str, history=None, **kwargs) -> str:
         self.last_user_message = user_message
         self.last_history = history
@@ -36,97 +42,40 @@ def _create_user(db_session, email: str = "chat@example.com"):
     )
 
 
-def test_process_message_success(db_session):
+async def _collect_stream(service: ChatService, **kwargs) -> list[dict]:
+    events: list[dict] = []
+    async for event in service.process_message_stream(**kwargs):
+        events.append(event)
+    return events
+
+
+def _run_stream(service: ChatService, **kwargs) -> list[dict]:
+    return asyncio.run(_collect_stream(service, **kwargs))
+
+
+def test_ensure_session_active_success(db_session):
     user = _create_user(db_session)
     db_session.flush()
 
-    agent = FakeSupportAgent(reply="Agent reply")
-    service = ChatService(db_session, agent)
+    service = ChatService(db_session, FakeSupportAgent())
     session = service.create_session(user_id=user.id)
 
-    result = asyncio.run(
-        service.process_message(
-            session_id=session.id,
-            user_id=user.id,
-            content="I need help with my order",
-        )
-    )
+    active = service.ensure_session_active(session.id, user.id)
 
-    assert result.user_message.content == "I need help with my order"
-    assert result.user_message.role == "user"
-    assert result.assistant_message.content == "Agent reply"
-    assert result.assistant_message.role == "assistant"
-    assert result.user_message.chat_session_id == session.id
-    assert result.assistant_message.chat_session_id == session.id
-    assert agent.last_user_message == "I need help with my order"
-    assert agent.last_history == []
+    assert active.id == session.id
 
 
-def test_process_message_passes_prior_history(db_session):
-    user = _create_user(db_session)
-    db_session.flush()
-
-    agent = FakeSupportAgent()
-    service = ChatService(db_session, agent)
-    session = service.create_session(user_id=user.id)
-
-    asyncio.run(
-        service.process_message(
-            session_id=session.id,
-            user_id=user.id,
-            content="First question",
-        )
-    )
-    asyncio.run(
-        service.process_message(
-            session_id=session.id,
-            user_id=user.id,
-            content="Follow-up question",
-        )
-    )
-
-    assert agent.last_user_message == "Follow-up question"
-    assert agent.last_history == [
-        Message(role="user", content="First question"),
-        Message(role="assistant", content="Agent reply"),
-    ]
-
-
-def test_process_message_session_not_found_raises(db_session):
+def test_ensure_session_active_not_found_raises(db_session):
     user = _create_user(db_session)
     db_session.flush()
 
     service = ChatService(db_session, FakeSupportAgent())
 
     with pytest.raises(ChatSessionNotFoundError):
-        asyncio.run(
-            service.process_message(
-                session_id=uuid4(),
-                user_id=user.id,
-                content="Hello",
-            )
-        )
+        service.ensure_session_active(uuid4(), user.id)
 
 
-def test_process_message_wrong_user_raises(db_session):
-    owner = _create_user(db_session, email="owner@example.com")
-    other = _create_user(db_session, email="other@example.com")
-    db_session.flush()
-
-    service = ChatService(db_session, FakeSupportAgent())
-    session = service.create_session(user_id=owner.id)
-
-    with pytest.raises(ChatSessionNotFoundError):
-        asyncio.run(
-            service.process_message(
-                session_id=session.id,
-                user_id=other.id,
-                content="Hello",
-            )
-        )
-
-
-def test_process_message_finalized_session_raises(db_session):
+def test_ensure_session_active_finalized_raises(db_session):
     user = _create_user(db_session)
     db_session.flush()
 
@@ -140,12 +89,111 @@ def test_process_message_finalized_session_raises(db_session):
     service = ChatService(db_session, FakeSupportAgent())
 
     with pytest.raises(ChatSessionFinalizedError):
-        asyncio.run(
-            service.process_message(
-                session_id=session.id,
-                user_id=user.id,
-                content="Hello",
-            )
+        service.ensure_session_active(session.id, user.id)
+
+
+def test_process_message_stream_success(db_session):
+    user = _create_user(db_session)
+    db_session.flush()
+
+    agent = FakeSupportAgent(reply="Agent reply")
+    service = ChatService(db_session, agent)
+    session = service.create_session(user_id=user.id)
+
+    events = _run_stream(
+        service,
+        session_id=session.id,
+        user_id=user.id,
+        content="I need help with my order",
+    )
+
+    assert events[0]["type"] == "turn_started"
+    assert events[1]["type"] == "token"
+    assert events[-1]["type"] == "done"
+    assert events[-1]["content"] == "Agent reply"
+    assert agent.last_user_message == "I need help with my order"
+    assert agent.last_history == []
+
+
+def test_process_message_stream_passes_prior_history(db_session):
+    user = _create_user(db_session)
+    db_session.flush()
+
+    agent = FakeSupportAgent()
+    service = ChatService(db_session, agent)
+    session = service.create_session(user_id=user.id)
+
+    _run_stream(
+        service,
+        session_id=session.id,
+        user_id=user.id,
+        content="First question",
+    )
+    _run_stream(
+        service,
+        session_id=session.id,
+        user_id=user.id,
+        content="Follow-up question",
+    )
+
+    assert agent.last_user_message == "Follow-up question"
+    assert agent.last_history == [
+        Message(role="user", content="First question"),
+        Message(role="assistant", content="Agent reply"),
+    ]
+
+
+def test_process_message_stream_session_not_found_raises(db_session):
+    user = _create_user(db_session)
+    db_session.flush()
+
+    service = ChatService(db_session, FakeSupportAgent())
+
+    with pytest.raises(ChatSessionNotFoundError):
+        _run_stream(
+            service,
+            session_id=uuid4(),
+            user_id=user.id,
+            content="Hello",
+        )
+
+
+def test_process_message_stream_wrong_user_raises(db_session):
+    owner = _create_user(db_session, email="owner@example.com")
+    other = _create_user(db_session, email="other@example.com")
+    db_session.flush()
+
+    service = ChatService(db_session, FakeSupportAgent())
+    session = service.create_session(user_id=owner.id)
+
+    with pytest.raises(ChatSessionNotFoundError):
+        _run_stream(
+            service,
+            session_id=session.id,
+            user_id=other.id,
+            content="Hello",
+        )
+
+
+def test_process_message_stream_finalized_session_raises(db_session):
+    user = _create_user(db_session)
+    db_session.flush()
+
+    session = ChatSession(
+        user_id=user.id,
+        finalized_at=datetime.now(UTC),
+    )
+    db_session.add(session)
+    db_session.commit()
+
+    service = ChatService(db_session, FakeSupportAgent())
+
+    with pytest.raises(ChatSessionFinalizedError):
+        _run_stream(
+            service,
+            session_id=session.id,
+            user_id=user.id,
+            content="Hello",
         )
 
 
@@ -157,12 +205,11 @@ def test_list_session_messages_returns_latest_page(db_session):
     session = service.create_session(user_id=user.id)
 
     for index in range(3):
-        asyncio.run(
-            service.process_message(
-                session_id=session.id,
-                user_id=user.id,
-                content=f"Message {index + 1}",
-            )
+        _run_stream(
+            service,
+            session_id=session.id,
+            user_id=user.id,
+            content=f"Message {index + 1}",
         )
 
     messages, has_more = service.list_session_messages(
@@ -185,12 +232,11 @@ def test_list_session_messages_paginates_with_offset(db_session):
     session = service.create_session(user_id=user.id)
 
     for index in range(3):
-        asyncio.run(
-            service.process_message(
-                session_id=session.id,
-                user_id=user.id,
-                content=f"Message {index + 1}",
-            )
+        _run_stream(
+            service,
+            session_id=session.id,
+            user_id=user.id,
+            content=f"Message {index + 1}",
         )
 
     first_page, has_more = service.list_session_messages(
@@ -283,9 +329,10 @@ def test_get_or_create_active_session_rolls_back_on_commit_error(db_session, mon
         service.get_or_create_active_session(user_id=user.id)
 
 
-def test_process_message_rolls_back_on_agent_error(db_session):
+def test_process_message_stream_rolls_back_on_agent_error(db_session):
     class FailingAgent:
-        async def reply(self, *args, **kwargs) -> str:
+        async def reply_stream(self, *args, **kwargs):
+            yield {"type": "token", "content": "partial"}
             raise RuntimeError("agent failed")
 
     user = _create_user(db_session)
@@ -295,12 +342,11 @@ def test_process_message_rolls_back_on_agent_error(db_session):
     session = service.create_session(user_id=user.id)
 
     with pytest.raises(RuntimeError, match="agent failed"):
-        asyncio.run(
-            service.process_message(
-                session_id=session.id,
-                user_id=user.id,
-                content="Hello",
-            )
+        _run_stream(
+            service,
+            session_id=session.id,
+            user_id=user.id,
+            content="Hello",
         )
 
 

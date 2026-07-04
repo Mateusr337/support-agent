@@ -27,6 +27,9 @@ class FakeSupportAgent:
     async def reply(self, user_message: str, history=None, **kwargs) -> str:
         return FAKE_AGENT_REPLY
 
+    async def reply_stream(self, user_message: str, history=None, **kwargs):
+        yield {"type": "token", "content": FAKE_AGENT_REPLY}
+
 
 @pytest.fixture(autouse=True)
 def block_real_openai_api_calls():

@@ -14,6 +14,7 @@ export default function ChatWindow() {
     loadingOlder,
     hasMoreOlder,
     sending,
+    streaming,
     reloadingSession,
     error,
     sendMessage,
@@ -70,6 +71,7 @@ export default function ChatWindow() {
       <MessageList
         messages={messages}
         sending={sending}
+        streaming={streaming}
         loadingOlder={loadingOlder}
         hasMoreOlder={hasMoreOlder}
         onLoadOlder={loadOlderMessages}

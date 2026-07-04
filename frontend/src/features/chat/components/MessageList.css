@@ -68,6 +68,13 @@
   border-bottom-left-radius: 4px;
 }
 
+.message-stream-status {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 .message-typing {
   display: flex;
   align-items: center;

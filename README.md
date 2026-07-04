@@ -13,7 +13,7 @@ The application has the following requirements:
 - [x] Backend must have unit tests with at least 90% of coverage.
 - [x] You can use either cloud or local (open source) models, of your own choosing. *(OpenAI wired for chat and embeddings; local models not yet supported)*
 - [x] Must use an open-source Vector Database for performing RAG. *(Qdrant + `RagService` ingest and search)*
-- [x] Must use only the attached documents for building the Vector Database. *(Ingest reads PDFs from `documents/` only)*
+- [x] Must use only the attached documents for building the Vector Database. *(Ingest reads PDFs from `rag-docs/` only)*
 - [x] Must use a Chunking Strategy to index the document on the Vector Database. *(Fixed-size chunks with overlap via `rag/chunking.py`)*
 - [x] Must select a Search Strategy for retrieval. *(Query embedding + cosine similarity in Qdrant, score threshold)*
 - [x] Must have support for conversation with chat history.
@@ -37,7 +37,7 @@ Monorepo with a React frontend and a FastAPI backend, orchestrated via Docker Co
 
 ```
 support-agent/
-├── documents/          # HP PDF corpus (indexed manually via ingest CLI)
+├── rag-docs/           # HP PDF corpus (indexed manually via ingest CLI)
 ├── backend/              # FastAPI API
 ├── frontend/             # React SPA (TypeScript)
 ├── docker-compose.yml
@@ -49,11 +49,11 @@ Architecture details: `.cursor/rules/backend-architecture.mdc` and `.cursor/rule
 
 ## RAG and document corpus
 
-HP PDFs live in **`documents/`** at the repo root. They are **not** baked into the Docker image and are **not** indexed on container startup.
+HP PDFs live in **`rag-docs/`** at the repo root. They are **not** baked into the Docker image and are **not** indexed on container startup.
 
 | Concern | Location / mechanism |
 | ------- | -------------------- |
-| PDF files | `documents/*.pdf` |
+| PDF files | `rag-docs/*.pdf` |
 | Ingest CLI | `backend/app/scripts/ingest_documents.py` |
 | Ingest + search | `backend/app/rag/service.py` |
 | Chunking | `backend/app/rag/chunking.py` (default: 1000 chars, 200 overlap) |
@@ -73,7 +73,7 @@ python -m app.scripts.ingest_documents
 docker compose exec backend python -m app.scripts.ingest_documents
 ```
 
-Docker mounts `./documents` read-only at `/app/documents` inside the backend container (`DOCUMENTS_DIR`).
+Docker mounts `./rag-docs` read-only at `/app/rag-docs` inside the backend container (`DOCUMENTS_DIR`).
 
 ## Prerequisites
 
@@ -166,7 +166,7 @@ Root `.env` variables (required for Compose):
 | `EMBEDDING_PROVIDER` | Embedding vendor for RAG (default: `openai`)       |
 | `EMBEDDING_MODEL`    | Embedding model (default: `text-embedding-3-small`) |
 | `QDRANT_COLLECTION`  | Qdrant collection name for document vectors        |
-| `DOCUMENTS_DIR`      | Folder with HP PDFs (Compose default: `/app/documents`) |
+| `DOCUMENTS_DIR`      | Folder with HP PDFs (Compose default: `/app/rag-docs`) |
 | `VITE_API_URL`       | Backend URL exposed to the browser               |
 
 `backend/.env` uses the same JWT and LLM variables. When using Compose for `db` and `qdrant` only, set `DATABASE_URL` to port **5400** (see `backend/.env.example`).
@@ -191,7 +191,7 @@ All endpoints require a valid JWT (`Authorization: Bearer <token>`) except regis
 | `GET`  | `/api/v1/chat/conversations/active`               | Get or create the user's active session (`200`)          |
 | `POST` | `/api/v1/chat/conversations/reload`               | Finalize the active session and create a new one (`201`) |
 | `GET`  | `/api/v1/chat/conversations/{session_id}/messages` | List messages, cursor-paginated (`limit`, `offset`; default `10`) |
-| `POST` | `/api/v1/chat/conversations/{session_id}/messages` | Send a message (`201`; RAG + LLM assistant reply with chat history) |
+| `POST` | `/api/v1/chat/conversations/{session_id}/messages` | Send a message (`200` SSE stream; RAG + LLM assistant reply with chat history) |
 
 ### Audit
 
@@ -200,6 +200,22 @@ All endpoints require a valid JWT (`Authorization: Bearer <token>`) except regis
 | `GET`  | `/api/v1/audit/logs`  | List audit logs, cursor-paginated (`limit`, `offset`; default `25`; filters: `session_id`, `turn_id`) |
 
 Assistant replies use the support agent with document search (`search_documents`) and OpenAI chat completion. Pipeline steps are recorded in audit logs.
+
+#### Send message (SSE)
+
+`POST /api/v1/chat/conversations/{session_id}/messages` returns `text/event-stream` with JSON events:
+
+| Event | Payload |
+| ----- | ------- |
+| `turn_started` | `{ "turn_id": "..." }` |
+| `tool_call` | `{ "name": "search_documents" }` |
+| `token` | `{ "content": "..." }` |
+| `done` | `{ "assistant_message_id": 1, "content": "..." }` |
+| `error` | `{ "message": "..." }` |
+
+The client shows the user message optimistically; the server does not echo it in the stream.
+
+See [`docs/chat-sse-streaming.md`](docs/chat-sse-streaming.md) for the full SSE contract, flow, and extension guide.
 
 ### Health
 
@@ -260,7 +276,6 @@ Implemented:
 
 Not yet implemented:
 
-- Local / open-source LLM and embedding providers (OpenAI only today)
 - Load tests and quality benchmarks
 
-Manual step before RAG answers work: place HP PDFs in `documents/` and run the ingest CLI (see [RAG and document corpus](#rag-and-document-corpus)).
+Manual step before RAG answers work: place HP PDFs in `rag-docs/` and run the ingest CLI (see [RAG and document corpus](#rag-and-document-corpus)).

@@ -15,7 +15,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--path",
         type=Path,
         default=None,
-        help="Directory containing PDF files (default: DOCUMENTS_DIR / repo documents/)",
+        help="Directory containing PDF files (default: DOCUMENTS_DIR / repo rag-docs/)",
     )
     parser.add_argument(
         "--force",

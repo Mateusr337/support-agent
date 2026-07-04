@@ -1,6 +1,6 @@
 # Agent manual test cases
 
-Corpus: `documents/service_guide.pdf` (OMEN 17.3" Gaming Laptop) and `documents/user_guide.pdf` (HP ENVY 6000 All-in-One).
+Corpus: `rag-docs/service_guide.pdf` (OMEN 17.3" Gaming Laptop) and `rag-docs/user_guide.pdf` (HP ENVY 6000 All-in-One).
 
 Run ingest before testing:
 

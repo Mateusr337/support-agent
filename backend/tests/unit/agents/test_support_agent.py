@@ -52,8 +52,12 @@ def test_reply_runs_tool_loop_and_returns_final_answer():
             )
         return ChatCompletion(content="Reset the printer.")
 
+    async def fake_chat_stream(messages, **kwargs):
+        yield "Reset the printer."
+
     llm = MagicMock()
     llm.chat = AsyncMock(side_effect=fake_chat)
+    llm.chat_stream = fake_chat_stream
     searcher = FakeSearcher(
         chunks=[
             RetrievedChunk(
@@ -77,7 +81,7 @@ def test_reply_runs_tool_loop_and_returns_final_answer():
     assert result == "Reset the printer."
     assert searcher.last_query == "How do I reset my printer?"
     assert searcher.last_top_k == DEFAULT_TOP_K
-    assert llm.chat.await_count == 2
+    assert llm.chat.await_count == 1
 
     first_call = llm.chat.await_args_list[0]
     assert first_call.kwargs["temperature"] == 0.1
@@ -90,12 +94,60 @@ def test_reply_runs_tool_loop_and_returns_final_answer():
     assert first_messages[1:3] == history
     assert first_messages[-1].content == "How do I reset my printer?"
 
-    second_messages = captured_messages[1]
-    assert second_messages[-2].role == "assistant"
-    assert second_messages[-2].tool_calls[0].name == "search_documents"
-    assert second_messages[-1].role == "tool"
-    assert "manual.pdf" in second_messages[-1].content
-    assert "page 4" in second_messages[-1].content
+
+def test_reply_stream_emits_tool_call_and_tokens():
+    async def fake_chat(messages, **kwargs):
+        return ChatCompletion(
+            content=None,
+            tool_calls=(
+                ToolCallRequest(
+                    id="call_1",
+                    name="search_documents",
+                    arguments={"query": "battery specs"},
+                ),
+            ),
+        )
+
+    async def fake_chat_stream(messages, **kwargs):
+        yield "The "
+        yield "battery."
+
+    llm = MagicMock()
+    llm.chat = AsyncMock(side_effect=fake_chat)
+    llm.chat_stream = fake_chat_stream
+    agent, _ = _build_test_agent(llm, FakeSearcher())
+
+    async def collect_events():
+        events = []
+        async for event in agent.reply_stream("What battery?"):
+            events.append(event)
+        return events
+
+    events = asyncio.run(collect_events())
+
+    assert events == [
+        {"type": "tool_call", "name": "search_documents"},
+        {"type": "token", "content": "The "},
+        {"type": "token", "content": "battery."},
+    ]
+
+
+def test_reply_stream_emits_single_token_for_direct_answer():
+    llm = MagicMock()
+    llm.chat = AsyncMock(return_value=ChatCompletion(content="Hello! How can I help?"))
+    agent, searcher = _build_test_agent(llm, FakeSearcher())
+
+    async def collect_events():
+        events = []
+        async for event in agent.reply_stream("Hi"):
+            events.append(event)
+        return events
+
+    events = asyncio.run(collect_events())
+
+    assert events == [{"type": "token", "content": "Hello! How can I help?"}]
+    assert searcher.last_query is None
+    llm.chat.assert_awaited_once()
 
 
 def test_reply_returns_direct_answer_when_llm_skips_tools():

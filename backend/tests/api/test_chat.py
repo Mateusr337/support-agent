@@ -1,3 +1,15 @@
+import json
+
+
+def _parse_sse_events(body: str) -> list[dict]:
+    events: list[dict] = []
+    for block in body.strip().split("\n\n"):
+        for line in block.split("\n"):
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+    return events
+
+
 def test_create_conversation_success(client, auth_headers, registered_user):
     response = client.post("/api/v1/chat/conversations", headers=auth_headers)
 
@@ -116,17 +128,28 @@ def test_send_message_success(client, auth_headers, registered_user):
         json={"content": "Hello, I need help"},
     )
 
-    assert response.status_code == 201
-    data = response.json()
-    assert data["user_message"]["content"] == "Hello, I need help"
-    assert data["user_message"]["role"] == "user"
-    assert data["user_message"]["user_id"] == registered_user["id"]
-    assert data["user_message"]["chat_session_id"] == session_id
-    assert data["assistant_message"]["role"] == "assistant"
-    assert data["assistant_message"]["content"] == (
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = _parse_sse_events(response.text)
+    assert events[0]["type"] == "turn_started"
+    assert events[-1]["type"] == "done"
+    assert events[-1]["content"] == (
         "Thanks for your message. A support agent will help you shortly."
     )
-    assert data["assistant_message"]["chat_session_id"] == session_id
+
+    messages_response = client.get(
+        f"/api/v1/chat/conversations/{session_id}/messages",
+        headers=auth_headers,
+    )
+    assert messages_response.status_code == 200
+    items = messages_response.json()["items"]
+    assert items[0]["content"] == "Hello, I need help"
+    assert items[0]["role"] == "user"
+    assert items[0]["user_id"] == registered_user["id"]
+    assert items[1]["role"] == "assistant"
+    assert items[1]["content"] == (
+        "Thanks for your message. A support agent will help you shortly."
+    )
 
 
 def test_send_message_session_not_found_returns_404(client, auth_headers):
@@ -209,7 +232,9 @@ def _seed_messages(client, auth_headers, session_id, count):
             headers=auth_headers,
             json={"content": f"Message {index + 1}"},
         )
-        assert response.status_code == 201
+        assert response.status_code == 200
+        events = _parse_sse_events(response.text)
+        assert events[-1]["type"] == "done"
 
 
 def test_list_messages_returns_latest_page(client, auth_headers):

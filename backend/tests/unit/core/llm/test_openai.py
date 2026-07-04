@@ -112,6 +112,119 @@ def test_chat_logs_audit_entries_when_context_is_provided():
     assert audit_log.info.call_count == 3
 
 
+def test_chat_stream_yields_token_deltas():
+    async def fake_stream():
+        chunk_one = MagicMock()
+        chunk_one.choices = [MagicMock(delta=MagicMock(content="Hello"))]
+        chunk_one.usage = None
+        chunk_two = MagicMock()
+        chunk_two.choices = [MagicMock(delta=MagicMock(content=" world"))]
+        chunk_two.usage = None
+        yield chunk_one
+        yield chunk_two
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=fake_stream())
+
+    provider = _provider_with_mock_client(mock_client)
+    tokens = asyncio.run(_collect_stream(provider))
+
+    assert tokens == ["Hello", " world"]
+    mock_client.chat.completions.create.assert_awaited_once_with(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hi"}],
+        temperature=0.2,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+
+
+def test_chat_stream_logs_token_usage_when_context_is_provided():
+    async def fake_stream():
+        chunk_one = MagicMock()
+        chunk_one.choices = [MagicMock(delta=MagicMock(content="Hello"))]
+        chunk_one.usage = None
+        chunk_two = MagicMock()
+        chunk_two.choices = []
+        chunk_two.usage = MagicMock(
+            prompt_tokens=20,
+            completion_tokens=8,
+            total_tokens=28,
+        )
+        yield chunk_one
+        yield chunk_two
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=fake_stream())
+
+    audit_log = MagicMock()
+    session_id = uuid4()
+    turn_id = uuid4()
+    provider = _provider_with_mock_client(mock_client)
+
+    tokens = asyncio.run(
+        _collect_stream(
+            provider,
+            audit_log=audit_log,
+            session_id=session_id,
+            user_id=1,
+            turn_id=turn_id,
+        )
+    )
+
+    assert tokens == ["Hello"]
+    assert audit_log.info.call_count == 3
+    audit_log.info.assert_any_call(
+        session_id=session_id,
+        user_id=1,
+        turn_id=turn_id,
+        type="Token Usage",
+        message="LLM token usage",
+        data={
+            "model": "gpt-4o-mini",
+            "prompt_tokens": 20,
+            "completion_tokens": 8,
+            "total_tokens": 28,
+        },
+    )
+
+
+async def _collect_stream(
+    provider: OpenAILLMProvider,
+    *,
+    audit_log=None,
+    session_id=None,
+    user_id=None,
+    turn_id=None,
+) -> list[str]:
+    tokens: list[str] = []
+    async for token in provider.chat_stream(
+        [Message(role="user", content="Hi")],
+        temperature=0.2,
+        audit_log=audit_log,
+        session_id=session_id,
+        user_id=user_id,
+        turn_id=turn_id,
+    ):
+        tokens.append(token)
+    return tokens
+
+
+def test_chat_stream_raises_when_empty():
+    async def fake_stream():
+        chunk = MagicMock()
+        chunk.choices = [MagicMock(delta=MagicMock(content=None))]
+        chunk.usage = None
+        yield chunk
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=fake_stream())
+    provider = _provider_with_mock_client(mock_client)
+
+    with pytest.raises(RuntimeError, match="empty streamed response"):
+        asyncio.run(_collect_stream(provider))
+
+
 def test_chat_raises_when_content_is_empty():
     mock_client = MagicMock()
     mock_response = MagicMock()
