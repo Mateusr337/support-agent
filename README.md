@@ -11,11 +11,11 @@ The application has the following requirements:
 - [x] Frontend with Graphical Interface, of your own choosing, to provide user interaction.
 - [x] Backend must run with Python code using FastAPI.
 - [x] Backend must have unit tests with at least 90% of coverage.
-- [ ] You can use either cloud or local (open source) models, of your own choosing. *(OpenAI wired to chat; local models not yet supported)*
-- [x] Must use an open-source Vector Database for performing RAG. *(Qdrant connected; ingestion pending)*
-- [ ] Must use only the attached documents for building the Vector Database.
-- [ ] Must use a Chunking Strategy to index the document on the Vector Database.
-- [ ] Must select a Search Strategy for retrieval.
+- [ ] You can use either cloud or local (open source) models, of your own choosing. *(OpenAI wired for chat and embeddings; local models not yet supported)*
+- [x] Must use an open-source Vector Database for performing RAG. *(Qdrant + `RagService` ingest and search)*
+- [x] Must use only the attached documents for building the Vector Database. *(Ingest reads PDFs from `documents/` only)*
+- [x] Must use a Chunking Strategy to index the document on the Vector Database. *(Fixed-size chunks with overlap via `rag/chunking.py`)*
+- [x] Must select a Search Strategy for retrieval. *(Query embedding + cosine similarity in Qdrant, score threshold)*
 - [x] Must have support for conversation with chat history.
 - [x] Must store the user chats and history in the backend.
 - [x] Must run through Docker Compose, where all the application and necessary dependencies are containerized.
@@ -54,10 +54,12 @@ HP PDFs live in **`documents/`** at the repo root. They are **not** baked into t
 | Concern | Location / mechanism |
 | ------- | -------------------- |
 | PDF files | `documents/*.pdf` |
-| Ingest CLI (planned) | `backend/app/scripts/ingest_documents.py` |
-| Ingest + search logic (planned) | `backend/app/rag/service.py` |
-| Vector storage | Qdrant collection (`QDRANT_COLLECTION`) |
-| Chat retrieval | `tools/search_documents` → `RagService.search()` (agent never reads `documents/`) |
+| Ingest CLI | `backend/app/scripts/ingest_documents.py` |
+| Ingest + search | `backend/app/rag/service.py` |
+| Chunking | `backend/app/rag/chunking.py` (default: 1000 chars, 200 overlap) |
+| Embeddings | `backend/app/rag/embeddings/` (OpenAI by default) |
+| Vector storage | `backend/app/repositories/vector_repository.py` → Qdrant |
+| Chat retrieval | `SupportAgent` → `tools/search_documents` → `RagService.search()` |
 
 After adding PDFs, index manually:
 
@@ -161,6 +163,9 @@ Root `.env` variables (required for Compose):
 | `LLM_PROVIDER`       | LLM vendor (default: `openai`)                   |
 | `LLM_MODEL`          | Model name (default: `gpt-4o-mini`)              |
 | `OPENAI_API_KEY`     | OpenAI API key (required when provider is openai) |
+| `EMBEDDING_PROVIDER` | Embedding vendor for RAG (default: `openai`)       |
+| `EMBEDDING_MODEL`    | Embedding model (default: `text-embedding-3-small`) |
+| `QDRANT_COLLECTION`  | Qdrant collection name for document vectors        |
 | `DOCUMENTS_DIR`      | Folder with HP PDFs (Compose default: `/app/documents`) |
 | `VITE_API_URL`       | Backend URL exposed to the browser               |
 
@@ -184,10 +189,16 @@ All endpoints require a valid JWT (`Authorization: Bearer <token>`) except regis
 | ------ | ------------------------------------------------- | -------------------------------------------------------- |
 | `POST` | `/api/v1/chat/conversations`                      | Create a new chat session (`201`)                        |
 | `GET`  | `/api/v1/chat/conversations/active`               | Get or create the user's active session (`200`)          |
-| `GET`  | `/api/v1/chat/conversations/{session_id}/messages` | List messages, paginated (`limit`, `offset`; default `10`) |
-| `POST` | `/api/v1/chat/conversations/{session_id}/messages` | Send a message (`201`; returns user + assistant messages) |
+| `GET`  | `/api/v1/chat/conversations/{session_id}/messages` | List messages, cursor-paginated (`limit`, `offset`; default `10`) |
+| `POST` | `/api/v1/chat/conversations/{session_id}/messages` | Send a message (`201`; RAG + LLM assistant reply with chat history) |
 
-Assistant replies are currently a stub until RAG and LLM are wired into `ChatService`.
+### Audit
+
+| Method | Endpoint              | Description                                                       |
+| ------ | --------------------- | ----------------------------------------------------------------- |
+| `GET`  | `/api/v1/audit/logs`  | List audit logs, cursor-paginated (`limit`, `offset`; default `25`; filters: `session_id`, `turn_id`) |
+
+Assistant replies use the support agent with document search (`search_documents`) and OpenAI chat completion. Pipeline steps are recorded in audit logs.
 
 ### Health
 
@@ -207,6 +218,9 @@ Interactive docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 | `/login`    | LoginPage      | guest only    |
 | `/register` | RegisterPage   | guest only    |
 | `/chat`     | ChatPage       | authenticated |
+| `/audit`    | AuditLogsPage  | authenticated |
+
+The chat UI loads the latest messages first and fetches older messages when scrolling to the top. The audit logs page uses the same cursor-pagination pattern (default 25 logs per page, infinite scroll).
 
 ## Backend tests
 
@@ -214,7 +228,7 @@ Tests use **pytest**, **pytest-cov**, and **httpx** (`backend/requirements-dev.t
 
 Tests use an in-memory SQLite database (no Postgres required). Override `get_db` via `app.dependency_overrides` in `conftest.py`.
 
-Current coverage: **~95%** on `app/` (71 tests).
+Current coverage: **~96%** on `app/` (139 tests).
 
 ```bash
 cd backend
@@ -232,18 +246,20 @@ Layout mirrors the backend layers — see `.cursor/rules/backend-architecture.md
 Implemented:
 
 - Docker Compose with PostgreSQL, Qdrant, backend, and frontend
-- Alembic migrations (users, chat sessions, chat messages)
+- Alembic migrations (users, chat sessions, chat messages, audit logs)
 - Health endpoints: `/api/v1/health`, `/api/v1/health/db`, `/api/v1/health/qdrant`
 - Auth: register, login, JWT, `/api/v1/auth/me`
-- Chat API: sessions, message storage, pagination, LLM assistant replies with chat history
-- Frontend: auth (login / register), protected chat UI wired to the chat API
+- Chat API: sessions, message storage, cursor pagination, LLM assistant replies with chat history
+- RAG pipeline: PDF ingest CLI, chunking, OpenAI embeddings, Qdrant vector search
+- Support agent: `search_documents` tool wired to `RagService` on every user message
+- Audit logging: backend pipeline events (agent, LLM, tools) + `/api/v1/audit/logs` API
+- Frontend: auth (login / register), chat UI with scroll-to-load-older messages, audit logs UI with infinite scroll
 - LLM integration: `core/llm/` adapters and `SupportAgent` wired into `ChatService`
-- Backend test suite with ~95% coverage
+- Backend test suite with ~96% coverage
 
 Not yet implemented:
 
-- RAG pipeline (`rag/service.py`, `vector_repository.py`, ingest CLI implementation)
-- HP document indexing into Qdrant
+- Local / open-source LLM and embedding providers (OpenAI only today)
 - Load tests and quality benchmarks
 
-Architecture declared: `documents/` folder, `DOCUMENTS_DIR`, Docker volume mount, manual ingest workflow (see `.cursor/rules/backend-architecture.mdc`).
+Manual step before RAG answers work: place HP PDFs in `documents/` and run the ingest CLI (see [RAG and document corpus](#rag-and-document-corpus)).

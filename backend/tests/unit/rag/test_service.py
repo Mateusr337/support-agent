@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.rag.chunking import TextChunk
-from app.rag.service import IngestReport, RagService, get_rag_service
+from app.rag.service import DEFAULT_SEARCH_SCORE_THRESHOLD, IngestReport, RagService, get_rag_service
 from app.tools.base import RetrievedChunk
 
 
@@ -129,9 +129,29 @@ def test_search_returns_retrieved_chunks(service, vector_repository, embedding_p
     vector_repository.search.assert_called_once_with(
         [0.5, 0.6],
         top_k=3,
-        score_threshold=0.5,
+        score_threshold=DEFAULT_SEARCH_SCORE_THRESHOLD,
     )
-    assert chunks == [RetrievedChunk(text="Reset steps", source="manual.pdf")]
+    assert chunks == [
+        RetrievedChunk(
+            text="Reset steps",
+            source="manual.pdf",
+            page_number=2,
+            score=0.91,
+        )
+    ]
+
+
+def test_search_uses_explicit_score_threshold(service, vector_repository, embedding_provider):
+    embedding_provider.embed = AsyncMock(return_value=[[0.5, 0.6]])
+    vector_repository.search.return_value = []
+
+    asyncio.run(service.search("reset printer", top_k=3, score_threshold=0.45))
+
+    vector_repository.search.assert_called_once_with(
+        [0.5, 0.6],
+        top_k=3,
+        score_threshold=0.45,
+    )
 
 
 def test_search_returns_empty_list_when_embedding_is_empty(service, embedding_provider):

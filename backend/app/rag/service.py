@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from app.core.config import settings
 from app.rag.chunking import TextChunk, chunk_pages
@@ -10,6 +10,8 @@ from app.rag.embeddings.factory import get_embedding_provider
 from app.rag.loaders.pdf import load_pdf
 from app.repositories.vector_repository import VectorPoint, VectorRepository
 from app.tools.base import RetrievedChunk
+
+DEFAULT_SEARCH_SCORE_THRESHOLD = 0.5
 
 
 @dataclass(frozen=True)
@@ -29,7 +31,7 @@ class RagService:
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
         embed_batch_size: int = 32,
-        search_score_threshold: float | None = 0.5,
+        search_score_threshold: float | None = DEFAULT_SEARCH_SCORE_THRESHOLD,
     ) -> None:
         self._vector_repository = vector_repository
         self._embedding_provider = embedding_provider
@@ -82,21 +84,39 @@ class RagService:
         self._vector_repository.ensure_collection(self._embedding_provider.dimension)
         return await self._index_pdf(Path(path))
 
-    async def search(self, query: str, *, top_k: int = 5) -> list[RetrievedChunk]:
+    async def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        score_threshold: float | None = None,
+    ) -> list[RetrievedChunk]:
         vectors = await self._embedding_provider.embed([query])
         if not vectors:
             return []
 
+        effective_score_threshold = (
+            self._search_score_threshold
+            if score_threshold is None
+            else score_threshold
+        )
         hits = self._vector_repository.search(
             vectors[0],
             top_k=top_k,
-            score_threshold=self._search_score_threshold,
+            score_threshold=effective_score_threshold,
         )
-        return [
-            RetrievedChunk(text=hit.text, source=hit.source)
+        chunks = [
+            RetrievedChunk(
+                text=hit.text,
+                source=hit.source,
+                page_number=hit.page_number,
+                score=hit.score,
+            )
             for hit in hits
             if hit.text
         ]
+
+        return chunks
 
     async def _index_pdf(self, pdf_path: Path) -> int:
         pages = load_pdf(pdf_path)

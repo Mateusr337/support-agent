@@ -9,6 +9,8 @@ from app.services.audit_log_service import AuditLogService
 class RetrievedChunk:
     text: str
     source: str | None = None
+    page_number: int | None = None
+    score: float | None = None
 
 
 @dataclass(frozen=True)

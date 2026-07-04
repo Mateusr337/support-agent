@@ -9,7 +9,7 @@ from app.agents.support_agent import SupportAgent
 from app.core.llm.base import Message
 from app.tools.base import RetrievedChunk, ToolContext
 from app.tools.registry import ToolDeps, build_tool_set
-from app.tools.search_documents import SearchDocumentsTool
+from app.tools.search_documents import DEFAULT_SCORE_THRESHOLD, DEFAULT_TOP_K, SearchDocumentsTool
 
 
 class FakeSearcher:
@@ -17,18 +17,18 @@ class FakeSearcher:
         self._chunks = chunks or []
         self.last_query: str | None = None
         self.last_top_k: int | None = None
+        self.last_score_threshold: float | None = None
 
-    async def search(self, query: str, *, top_k: int = 5) -> list[RetrievedChunk]:
+    async def search(self, query: str, *, top_k: int = 5, score_threshold: float | None = None, **kwargs) -> list[RetrievedChunk]:
         self.last_query = query
         self.last_top_k = top_k
+        self.last_score_threshold = score_threshold
         return self._chunks
 
 
 def _build_test_agent(
     llm: MagicMock,
     searcher: FakeSearcher,
-    *,
-    top_k: int = 5,
 ) -> tuple[SupportAgent, FakeSearcher]:
     config = AGENTS["support"]
     tools = build_tool_set(config.tool_names, ToolDeps(searcher=searcher))
@@ -39,7 +39,13 @@ def test_reply_calls_llm_with_context_and_history():
     llm = MagicMock()
     llm.chat = AsyncMock(return_value="Reset the printer.")
     searcher = FakeSearcher(
-        chunks=[RetrievedChunk(text="Press and hold the power button.", source="manual.pdf")]
+        chunks=[
+            RetrievedChunk(
+                text="Press and hold the power button.",
+                source="manual.pdf",
+                page_number=4,
+            )
+        ]
     )
     agent, searcher = _build_test_agent(llm, searcher)
     history = [Message(role="user", content="Hi"), Message(role="assistant", content="Hello")]
@@ -48,20 +54,20 @@ def test_reply_calls_llm_with_context_and_history():
         agent.reply(
             "How do I reset my printer?",
             history=history,
-            top_k=3,
             temperature=0.1,
         )
     )
 
     assert result == "Reset the printer."
     assert searcher.last_query == "How do I reset my printer?"
-    assert searcher.last_top_k == 3
+    assert searcher.last_top_k == DEFAULT_TOP_K
     llm.chat.assert_awaited_once()
     call_kwargs = llm.chat.await_args.kwargs
     assert call_kwargs["temperature"] == 0.1
     messages = llm.chat.await_args.args[0]
     assert messages[0].role == "system"
     assert "manual.pdf" in messages[0].content
+    assert "page 4" in messages[0].content
     assert messages[1:-1] == history
     assert messages[-1].content == "How do I reset my printer?"
 
@@ -105,10 +111,38 @@ def test_reply_passes_audit_context_to_llm():
     )
 
 
-def test_search_documents_tool_logs_rag_call():
+def test_search_documents_tool_uses_default_top_k():
+    searcher = FakeSearcher()
+    tool = SearchDocumentsTool(searcher)
+
+    asyncio.run(tool.run({"query": "reset printer"}, context=ToolContext()))
+
+    assert searcher.last_top_k == DEFAULT_TOP_K
+    assert searcher.last_score_threshold == DEFAULT_SCORE_THRESHOLD
+
+
+def test_search_documents_tool_uses_custom_score_threshold():
+    searcher = FakeSearcher()
+    tool = SearchDocumentsTool(searcher, default_score_threshold=0.35)
+
+    asyncio.run(tool.run({"query": "reset printer"}, context=ToolContext()))
+
+    assert searcher.last_score_threshold == 0.35
+
+
+def test_search_documents_tool_logs_tool_call_and_result():
     audit_log = MagicMock()
     tool = SearchDocumentsTool(
-        FakeSearcher([RetrievedChunk(text="Reset steps", source="manual.pdf")])
+        FakeSearcher(
+            [
+                RetrievedChunk(
+                    text="Reset steps",
+                    source="manual.pdf",
+                    page_number=2,
+                    score=0.91,
+                )
+            ]
+        )
     )
 
     asyncio.run(
@@ -123,10 +157,19 @@ def test_search_documents_tool_logs_rag_call():
         )
     )
 
-    audit_log.info.assert_called_once()
-    call_kwargs = audit_log.info.call_args.kwargs
-    assert call_kwargs["type"] == "rag_call"
-    assert call_kwargs["data"]["query"] == "reset printer"
+    assert audit_log.info.call_count == 2
+    tool_call = audit_log.info.call_args_list[0].kwargs
+    tool_result = audit_log.info.call_args_list[1].kwargs
+    assert tool_call["type"] == "Tool Call"
+    assert tool_call["data"]["query"] == "reset printer"
+    assert tool_result["type"] == "Tool Result"
+    assert tool_result["data"]["result_count"] == 1
+    assert tool_result["data"]["results"][0] == {
+        "source": "manual.pdf",
+        "page_number": 2,
+        "score": 0.91,
+        "text": "Reset steps",
+    }
 
 
 @patch("app.agents.registry.get_rag_service")

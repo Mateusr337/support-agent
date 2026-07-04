@@ -29,7 +29,7 @@ def test_create_and_list_with_filters(db_session):
         session_id=session.id,
         user_id=user.id,
         turn_id=turn_a,
-        type="agent_request",
+        type="Agent",
         status="info",
         message="First turn",
     )
@@ -37,7 +37,7 @@ def test_create_and_list_with_filters(db_session):
         session_id=session.id,
         user_id=user.id,
         turn_id=turn_b,
-        type="agent_response",
+        type="Tool Result",
         status="info",
         message="Second turn",
     )
@@ -65,7 +65,7 @@ def test_list_without_filters_returns_all_logs(db_session):
         session_id=session.id,
         user_id=user.id,
         turn_id=uuid4(),
-        type="agent_request",
+        type="Agent",
         status="info",
         message="Log entry",
     )
@@ -89,7 +89,7 @@ def test_list_paginates_with_offset(db_session):
             session_id=session.id,
             user_id=user.id,
             turn_id=uuid4(),
-            type="agent_request",
+            type="Agent",
             status="info",
             message=f"Log {index}",
         )

@@ -17,7 +17,6 @@ class SupportAgent:
         user_message: str,
         history: list[Message] | None = None,
         *,
-        top_k: int = 5,
         temperature: float = 0.2,
         turn_id: UUID | None = None,
         session_id: UUID | None = None,
@@ -29,7 +28,6 @@ class SupportAgent:
 
         context = await self._resolve_context(
             user_message,
-            top_k=top_k,
             turn_id=turn_id,
             session_id=session_id,
             user_id=user_id,
@@ -49,7 +47,6 @@ class SupportAgent:
         self,
         user_message: str,
         *,
-        top_k: int,
         turn_id: UUID | None,
         session_id: UUID | None,
         user_id: int | None,
@@ -69,7 +66,7 @@ class SupportAgent:
 
             tool = self._tools[binding.name]
             result = await tool.run(
-                self._build_always_arguments(binding.name, user_message, top_k=top_k),
+                self._build_always_arguments(binding.name, user_message),
                 context=tool_context,
             )
             parts.append(result.content)
@@ -79,15 +76,9 @@ class SupportAgent:
 
         return "\n\n".join(parts)
 
-    def _build_always_arguments(
-        self,
-        tool_name: str,
-        user_message: str,
-        *,
-        top_k: int,
-    ) -> dict:
+    def _build_always_arguments(self, tool_name: str, user_message: str) -> dict:
         if tool_name == "search_documents":
-            return {"query": user_message, "top_k": top_k}
+            return {"query": user_message}
         raise NotImplementedError(f"Always invocation not defined for tool: {tool_name}")
 
     def _build_messages(

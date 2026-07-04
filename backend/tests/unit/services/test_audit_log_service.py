@@ -26,7 +26,7 @@ def test_info_warn_and_error_create_logs_with_status(db_session):
         "session_id": session.id,
         "user_id": user.id,
         "turn_id": turn_id,
-        "type": "tool_call",
+        "type": "Tool Call",
         "message": "Tool invoked",
     }
 
@@ -35,14 +35,14 @@ def test_info_warn_and_error_create_logs_with_status(db_session):
         session_id=session.id,
         user_id=user.id,
         turn_id=turn_id,
-        type="tool_call",
+        type="Tool Call",
         message="Slow response",
     )
     error_log = service.error(
         session_id=session.id,
         user_id=user.id,
         turn_id=turn_id,
-        type="tool_call",
+        type="Tool Call",
         message="Tool failed",
     )
 
@@ -63,7 +63,7 @@ def test_list_delegates_to_repository(db_session):
         session_id=session.id,
         user_id=user.id,
         turn_id=turn_id,
-        type="agent_request",
+        type="Agent",
         message="Processing",
     )
     db_session.commit()

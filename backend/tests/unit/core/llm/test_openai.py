@@ -25,7 +25,7 @@ def test_audit_info_skips_when_context_is_incomplete():
         session_id=None,
         user_id=1,
         turn_id=uuid4(),
-        type="agent_request",
+        type="Agent",
         message="LLM request",
         data={},
     )
@@ -44,7 +44,7 @@ def test_audit_info_writes_log_when_context_is_complete():
         session_id=session_id,
         user_id=1,
         turn_id=turn_id,
-        type="token_usage",
+        type="Token Usage",
         message="LLM token usage",
         data={"total_tokens": 15},
     )
@@ -53,7 +53,7 @@ def test_audit_info_writes_log_when_context_is_complete():
         session_id=session_id,
         user_id=1,
         turn_id=turn_id,
-        type="token_usage",
+        type="Token Usage",
         message="LLM token usage",
         data={"total_tokens": 15},
     )

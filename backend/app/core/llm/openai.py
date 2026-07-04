@@ -29,7 +29,7 @@ class OpenAILLMProvider:
             session_id=session_id,
             user_id=user_id,
             turn_id=turn_id,
-            type="agent_request",
+            type="Agent",
             message="LLM request",
             data={
                 "model": self._model,
@@ -53,7 +53,7 @@ class OpenAILLMProvider:
             session_id=session_id,
             user_id=user_id,
             turn_id=turn_id,
-            type="agent_response",
+            type="Agent",
             message="LLM response",
             data={"model": self._model, "content": content},
         )
@@ -64,7 +64,7 @@ class OpenAILLMProvider:
                 session_id=session_id,
                 user_id=user_id,
                 turn_id=turn_id,
-                type="token_usage",
+                type="Token Usage",
                 message="LLM token usage",
                 data={
                     "model": self._model,

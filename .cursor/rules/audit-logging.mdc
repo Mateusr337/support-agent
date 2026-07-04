@@ -1,19 +1,18 @@
 ---
 description: Audit logging for AI flows and operations (not HTTP/API)
-globs: backend/app/agents/**,backend/app/tools/**,backend/app/services/**,backend/app/core/llm/**,backend/app/rag/**
+globs: backend/app/agents/**,backend/app/tools/**,backend/app/services/**,backend/app/core/llm/**
 alwaysApply: false
 ---
 
 # Audit Logging
 
-Audit AI pipeline steps — LLM calls, RAG retrieval, tool use, token usage, and errors. Do **not** use audit logs for HTTP/API concerns (request routing, status codes, auth middleware).
+Audit AI pipeline steps — LLM calls, tool use, token usage, and errors. Do **not** use audit logs for HTTP/API concerns (request routing, status codes, auth middleware).
 
 ## Who should use `AuditLogService`
 
 - `app/agents/` — agent orchestration, tool loops
 - `app/services/chat_service.py` — message processing entry point
 - `app/core/llm/` — provider calls and token usage
-- `app/rag/` — retrieval and ingestion
 - `app/tools/` — individual tool invocations
 
 ## Who should NOT use it
@@ -38,41 +37,42 @@ self._audit_log.info(
     session_id=session_id,
     user_id=user_id,
     turn_id=turn_id,
-    type="agent_request",
+    type="Agent" | "Tool Call",
     message="Processing user message",
     data={"content_length": len(content)},
 )
 ```
 
-| Field | Purpose |
-|-------|---------|
-| `session_id` | Chat session UUID |
-| `user_id` | Owner of the session |
-| `turn_id` | One user message + full system processing cycle (see below) |
-| `type` | Event category (indexed) |
-| `message` | Human-readable summary |
-| `data` | Optional JSON payload |
-| `status` | Set by method: `info`, `warn`, or `error` |
+| Field        | Purpose                                                     |
+| ------------ | ----------------------------------------------------------- |
+| `session_id` | Chat session UUID                                           |
+| `user_id`    | Owner of the session                                        |
+| `turn_id`    | One user message + full system processing cycle (see below) |
+| `type`       | Event category (indexed)                                    |
+| `message`    | Human-readable summary                                      |
+| `data`       | Optional JSON payload                                       |
+| `status`     | Set by method: `info`, `warn`, or `error`                   |
 
 ### `type` examples
 
-`tool_call`, `tool_response`, `agent_request`, `agent_response`, `token_usage`, `rag_call`
+`Tool Call`, `Tool Result`, `Agent`, `Token Usage`
 
 ## Turn ID
 
-`turn_id` groups every audit entry for a single processing cycle (one inbound user message through agent/LLM/RAG/tools to the assistant reply).
+`turn_id` groups every audit entry for a single processing cycle (one inbound user message through agent/LLM/tools to the assistant reply).
 
 - Scoped per chat session: a new UUID (`uuid4()`) assigned at the start of each `ChatService.process_message` call
-- Pass `turn_id` (and `session_id`, `user_id` when needed) into agents, LLM providers, and RAG helpers for downstream logging
+- Pass `turn_id` (and `session_id`, `user_id` when needed) into agents, LLM providers, and tools for downstream logging
 
 ## When to log
 
 Log at meaningful pipeline steps:
 
-- User message accepted → `agent_request`
-- RAG retrieval → `rag_call`
-- LLM invocation / completion → `agent_response`, `token_usage`
-- Tool invoke / result → `tool_call`, `tool_response`
+- User message accepted / agent reply → `Agent`
+- LLM invocation / completion → `Agent`
+- Tool invoke → `Tool Call`
+- Tool output (e.g. retrieved documents) → `Tool Result`
+- Token usage → `Token Usage`
 - Recoverable issues → `warn`
 - Failures → `error`
 

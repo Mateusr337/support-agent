@@ -2,14 +2,31 @@ from typing import Protocol
 
 from app.tools.base import RetrievedChunk, ToolContext, ToolDefinition, ToolResult
 
+DEFAULT_TOP_K = 10
+DEFAULT_SCORE_THRESHOLD = 0.2
+
 
 class DocumentSearcher(Protocol):
-    async def search(self, query: str, *, top_k: int = 5) -> list[RetrievedChunk]: ...
+    async def search(
+        self,
+        query: str,
+        *,
+        top_k: int = DEFAULT_TOP_K,
+        score_threshold: float | None = DEFAULT_SCORE_THRESHOLD,
+    ) -> list[RetrievedChunk]: ...
 
 
 class SearchDocumentsTool:
-    def __init__(self, searcher: DocumentSearcher) -> None:
+    def __init__(
+        self,
+        searcher: DocumentSearcher,
+        *,
+        default_top_k: int = DEFAULT_TOP_K,
+        default_score_threshold: float | None = DEFAULT_SCORE_THRESHOLD,
+    ) -> None:
         self._searcher = searcher
+        self._default_top_k = default_top_k
+        self._default_score_threshold = default_score_threshold
 
     @property
     def definition(self) -> ToolDefinition:
@@ -21,6 +38,7 @@ class SearchDocumentsTool:
                 "properties": {
                     "query": {"type": "string"},
                     "top_k": {"type": "integer"},
+                    "score_threshold": {"type": "number"},
                 },
                 "required": ["query"],
             },
@@ -28,21 +46,50 @@ class SearchDocumentsTool:
 
     async def run(self, arguments: dict, *, context: ToolContext) -> ToolResult:
         query = arguments["query"]
-        top_k = arguments.get("top_k", 5)
-        chunks = await self._searcher.search(query, top_k=top_k)
+        top_k = arguments.get("top_k", self._default_top_k)
+        score_threshold = arguments.get("score_threshold", self._default_score_threshold)
 
         if context.audit_log is not None:
             context.audit_log.info(
                 session_id=context.session_id,
                 user_id=context.user_id,
                 turn_id=context.turn_id,
-                type="rag_call",
+                type="Tool Call",
+                message="Document search invoked",
+                data={
+                    "query": query,
+                    "top_k": top_k,
+                    "score_threshold": score_threshold,
+                },
+            )
+
+        chunks = await self._searcher.search(
+            query,
+            top_k=top_k,
+            score_threshold=score_threshold,
+        )
+
+        if context.audit_log is not None:
+            context.audit_log.info(
+                session_id=context.session_id,
+                user_id=context.user_id,
+                turn_id=context.turn_id,
+                type="Tool Result",
                 message="Document search completed",
                 data={
                     "query": query,
                     "top_k": top_k,
+                    "score_threshold": score_threshold,
                     "result_count": len(chunks),
-                    "sources": [chunk.source for chunk in chunks if chunk.source],
+                    "results": [
+                        {
+                            "source": chunk.source,
+                            "page_number": chunk.page_number,
+                            "score": chunk.score,
+                            "text": chunk.text,
+                        }
+                        for chunk in chunks
+                    ],
                 },
             )
 
@@ -58,7 +105,9 @@ class SearchDocumentsTool:
         parts: list[str] = []
         for index, chunk in enumerate(chunks, start=1):
             header = f"[{index}]"
-            if chunk.source:
+            if chunk.source and chunk.page_number is not None:
+                header = f"[{index}] ({chunk.source}, page {chunk.page_number})"
+            elif chunk.source:
                 header = f"[{index}] ({chunk.source})"
             parts.append(f"{header}\n{chunk.text}")
         return "\n\n".join(parts)

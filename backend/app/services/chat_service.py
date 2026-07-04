@@ -106,8 +106,9 @@ class ChatService:
                 session_id=session_id,
                 user_id=user_id,
                 turn_id=turn_id,
-                type="agent_request",
+                type="Agent",
                 message="Processing user message",
+                data={"content": content},
             )
             reply = await self._agent.reply(
                 content,
@@ -121,8 +122,9 @@ class ChatService:
                 session_id=session_id,
                 user_id=user_id,
                 turn_id=turn_id,
-                type="agent_response",
+                type="Agent",
                 message="Agent reply generated",
+                data={"reply_content": reply},
             )
             assistant_message = self._message_repository.create(
                 chat_session_id=session_id,
