@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.rag.chunking import TextChunk
+from app.rag.corpus import LAPTOP_MANUAL_FILENAME, PRINTER_MANUAL_FILENAME
 from app.rag.service import DEFAULT_SEARCH_SCORE_THRESHOLD, IngestReport, RagService, get_rag_service
 from app.tools.base import RetrievedChunk
 
@@ -178,7 +179,7 @@ def test_to_vector_point_builds_stable_payload(service):
 
     assert point.vector == [0.1, 0.2]
     assert point.payload == {
-        "text": "Reset steps",
+        "text": "Source: manual.pdf (product type: HP product)\n\nReset steps",
         "source": "manual.pdf",
         "page_number": 2,
         "chunk_index": 0,
@@ -189,6 +190,21 @@ def test_to_vector_point_builds_stable_payload(service):
         chunk=chunk,
         vector=[9.9, 9.9],
     ).id
+
+
+def test_enrich_chunk_text_adds_product_type_from_filename():
+    laptop_text = RagService._enrich_chunk_text(
+        LAPTOP_MANUAL_FILENAME,
+        "Safety warning",
+    )
+    assert "product type: laptop" in laptop_text
+    assert "Safety warning" in laptop_text
+
+    printer_text = RagService._enrich_chunk_text(
+        PRINTER_MANUAL_FILENAME,
+        "Quiet Mode",
+    )
+    assert "product type: printer" in printer_text
 
 
 @patch("app.rag.service.get_embedding_provider")

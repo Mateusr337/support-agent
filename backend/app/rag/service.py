@@ -4,7 +4,12 @@ from pathlib import Path
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from app.core.config import settings
-from app.rag.chunking import TextChunk, chunk_pages
+from app.rag.chunking import (
+    DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_CHUNK_SIZE,
+    TextChunk,
+    chunk_pages,
+)
 from app.rag.embeddings.base import EmbeddingProvider
 from app.rag.embeddings.factory import get_embedding_provider
 from app.rag.loaders.pdf import load_pdf
@@ -28,8 +33,8 @@ class RagService:
         vector_repository: VectorRepository,
         embedding_provider: EmbeddingProvider,
         *,
-        chunk_size: int = 1000,
-        chunk_overlap: int = 200,
+        chunk_size: int = DEFAULT_CHUNK_SIZE,
+        chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
         embed_batch_size: int = 32,
         search_score_threshold: float | None = DEFAULT_SEARCH_SCORE_THRESHOLD,
     ) -> None:
@@ -144,6 +149,18 @@ class RagService:
 
         return indexed
 
+    @staticmethod
+    def _enrich_chunk_text(doc_id: str, text: str) -> str:
+        name_lower = doc_id.lower()
+        if "omen" in name_lower or "laptop" in name_lower:
+            product_type = "laptop"
+        elif "envy" in name_lower or "printer" in name_lower or "all-in-one" in name_lower:
+            product_type = "printer"
+        else:
+            product_type = "HP product"
+
+        return f"Source: {doc_id} (product type: {product_type})\n\n{text}"
+
     def _to_vector_point(
         self,
         *,
@@ -152,11 +169,12 @@ class RagService:
         vector: list[float],
     ) -> VectorPoint:
         point_id = str(uuid5(NAMESPACE_URL, f"{doc_id}:{chunk.chunk_index}"))
+        enriched_text = self._enrich_chunk_text(doc_id, chunk.text)
         return VectorPoint(
             id=point_id,
             vector=vector,
             payload={
-                "text": chunk.text,
+                "text": enriched_text,
                 "source": chunk.source,
                 "page_number": chunk.page_number,
                 "chunk_index": chunk.chunk_index,

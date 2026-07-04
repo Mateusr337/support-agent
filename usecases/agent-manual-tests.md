@@ -1,6 +1,6 @@
 # Agent manual test cases
 
-Corpus: `rag-docs/service_guide.pdf` (OMEN 17.3" Gaming Laptop) and `rag-docs/user_guide.pdf` (HP ENVY 6000 All-in-One).
+Corpus: `rag-docs/OMEN 17.3 inch Gaming Laptop PC.pdf` (OMEN 17.3" Gaming Laptop) and `rag-docs/HP ENVY 6000 All-in-One series.pdf` (HP ENVY 6000 All-in-One).
 
 Run ingest before testing:
 
@@ -20,7 +20,7 @@ Pass criteria:
 
 **Question:** Can I use my OMEN laptop on my bed or lap for long gaming sessions?
 
-**Expected source:** `service_guide.pdf` (Safety warning)
+**Expected source:** `OMEN 17.3 inch Gaming Laptop PC.pdf` (Safety warning)
 
 **Answer must include:**
 
@@ -35,7 +35,7 @@ Pass criteria:
 
 **Question:** Can I replace the SSD on my OMEN 17 laptop myself?
 
-**Expected source:** `service_guide.pdf` (Customer Self-Repair, SSD procedure)
+**Expected source:** `OMEN 17.3 inch Gaming Laptop PC.pdf` (Customer Self-Repair, SSD procedure)
 
 **Answer must include:**
 
@@ -50,7 +50,7 @@ Pass criteria:
 
 **Question:** What battery does the OMEN 17.3 gaming laptop use?
 
-**Expected source:** `service_guide.pdf` (Product description / spare parts)
+**Expected source:** `OMEN 17.3 inch Gaming Laptop PC.pdf` (Product description / spare parts)
 
 **Answer must include:**
 
@@ -64,7 +64,7 @@ Pass criteria:
 
 **Question:** How much RAM can I install and what type does the OMEN laptop support?
 
-**Expected source:** `service_guide.pdf` (Product description, Memory modules)
+**Expected source:** `OMEN 17.3 inch Gaming Laptop PC.pdf` (Product description, Memory modules)
 
 **Answer must include:**
 
@@ -80,7 +80,7 @@ Pass criteria:
 
 **Question:** Does the OMEN laptop support TPM for security?
 
-**Expected source:** `service_guide.pdf` (Product description)
+**Expected source:** `OMEN 17.3 inch Gaming Laptop PC.pdf` (Product description)
 
 **Answer must include:**
 
@@ -93,7 +93,7 @@ Pass criteria:
 
 **Question:** How do I reset Wi-Fi on my HP ENVY 6000 and put it in setup mode again?
 
-**Expected source:** `user_guide.pdf` (Buttons, Connect)
+**Expected source:** `HP ENVY 6000 All-in-One series.pdf` (Buttons, Connect)
 
 **Answer must include:**
 
@@ -109,7 +109,7 @@ Pass criteria:
 
 **Question:** How do I make my HP ENVY 6000 print more quietly?
 
-**Expected source:** `user_guide.pdf` (Quiet Mode)
+**Expected source:** `HP ENVY 6000 All-in-One series.pdf` (Quiet Mode)
 
 **Answer must include:**
 
@@ -124,7 +124,7 @@ Pass criteria:
 
 **Question:** Why does my HP ENVY 6000 turn off by itself after a while?
 
-**Expected source:** `user_guide.pdf` (Auto-Off)
+**Expected source:** `HP ENVY 6000 All-in-One series.pdf` (Auto-Off)
 
 **Answer must include:**
 
@@ -139,7 +139,7 @@ Pass criteria:
 
 **Question:** How can I print a wireless network test report from the printer control panel?
 
-**Expected source:** `user_guide.pdf` (Print reports)
+**Expected source:** `HP ENVY 6000 All-in-One series.pdf` (Print reports)
 
 **Answer must include:**
 

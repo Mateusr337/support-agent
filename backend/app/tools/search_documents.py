@@ -1,9 +1,10 @@
+import time
 from typing import Protocol
 
 from app.tools.base import RetrievedChunk, ToolContext, ToolDefinition, ToolResult
 
-DEFAULT_TOP_K = 10
-DEFAULT_SCORE_THRESHOLD = 0.2
+DEFAULT_TOP_K = 5
+DEFAULT_SCORE_THRESHOLD = 0.4
 
 
 class DocumentSearcher(Protocol):
@@ -36,6 +37,8 @@ class SearchDocumentsTool:
                 "Retrieve relevant passages from indexed HP product manuals. "
                 "Use when the user asks about HP products, even in casual or vague wording "
                 "(specs, setup, troubleshooting, safety, parts, or warranty). "
+                "Include product name, model, and topic in the query (e.g. safety, lap, "
+                "bed, airflow for overheating questions). "
                 "Skip for greetings or non-product chat."
             ),
             parameters={
@@ -74,11 +77,13 @@ class SearchDocumentsTool:
                 },
             )
 
+        start = time.perf_counter()
         chunks = await self._searcher.search(
             query,
             top_k=top_k,
             score_threshold=score_threshold,
         )
+        latency_ms = round((time.perf_counter() - start) * 1000)
 
         if context.audit_log is not None:
             context.audit_log.info(
@@ -92,6 +97,7 @@ class SearchDocumentsTool:
                     "top_k": top_k,
                     "score_threshold": score_threshold,
                     "result_count": len(chunks),
+                    "latency_ms": latency_ms,
                     "results": [
                         {
                             "source": chunk.source,

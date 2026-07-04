@@ -20,7 +20,7 @@ The application has the following requirements:
 - [x] Must store the user chats and history in the backend.
 - [x] Must run through Docker Compose, where all the application and necessary dependencies are containerized.
 - [ ] Scalability must be ensured with load tests (how many requests per minute the solution supports)
-- [ ] Must benchmark the quality of the LLM responses to the user.
+- [x] Must benchmark the quality of the LLM responses to the user.
 
 ## Overview
 
@@ -53,7 +53,7 @@ HP PDFs live in **`rag-docs/`** at the repo root. They are **not** baked into th
 
 | Concern | Location / mechanism |
 | ------- | -------------------- |
-| PDF files | `rag-docs/*.pdf` |
+| PDF files | `rag-docs/*.pdf` (e.g. `OMEN 17.3 inch Gaming Laptop PC.pdf`, `HP ENVY 6000 All-in-One series.pdf`) |
 | Ingest CLI | `backend/app/scripts/ingest_documents.py` |
 | Ingest + search | `backend/app/rag/service.py` |
 | Chunking | `backend/app/rag/chunking.py` (default: 1000 chars, 200 overlap) |
@@ -245,7 +245,7 @@ Tests use **pytest**, **pytest-cov**, and **httpx** (`backend/requirements-dev.t
 
 Tests use an in-memory SQLite database (no Postgres required). Override `get_db` via `app.dependency_overrides` in `conftest.py`.
 
-Current coverage: **~96%** on `app/` (139 tests).
+Current coverage: **97.1%** on `app/` (**180 tests**, threshold 95%).
 
 ```bash
 cd backend
@@ -257,6 +257,41 @@ pytest --cov=app --cov-report=html           # HTML report → htmlcov/index.htm
 ```
 
 Layout mirrors the backend layers — see `.cursor/rules/backend-architecture.mdc` (Testing section).
+
+## LLM quality benchmark (DeepEval)
+
+Standalone evaluation against the live API (not part of `pytest` or coverage). Pilot covers cases 1 and 10 from [usecases/agent-manual-tests.md](usecases/agent-manual-tests.md).
+
+**Prerequisites:**
+
+```bash
+docker compose up --build
+docker compose exec backend python -m app.scripts.ingest_documents --force
+export OPENAI_API_KEY=sk-...
+```
+
+**Install dev deps (once):**
+
+```bash
+cd backend
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
+
+**Run:**
+
+```bash
+python -m app.scripts.run_deepeval --base-url http://localhost:8000
+```
+
+Writes `eval_report.json` and prints per-metric scores. Judge model: **gpt-4o**. A case **passes** only when **all** configured metrics pass.
+
+| Case | Answer Relevancy | Faithfulness | Contextual Relevancy / Hallucination | GEval | Pass |
+|------|-----------------|--------------|--------------------------------------|-------|------|
+| 1 - Laptop safety | 1.00 | 1.00 | Contextual 0.60 | SafetyFacts 1.00 | Yes |
+| 10 - No hallucination | 0.75 | 1.00 | Hallucination 0.00 | NoPrinthead 1.00 | Yes |
+
+Last run: **2/2** cases passed (2026-07-04). To extend the suite, add cases to [backend/eval/dataset.py](backend/eval/dataset.py).
 
 ## Current status
 
@@ -272,10 +307,12 @@ Implemented:
 - Audit logging: backend pipeline events (agent, LLM, tools) + `/api/v1/audit/logs` API
 - Frontend: auth (login / register), chat UI with scroll-to-load-older messages, audit logs UI with infinite scroll
 - LLM integration: `core/llm/` adapters and `SupportAgent` wired into `ChatService`
-- Backend test suite with ~96% coverage
+- Backend test suite: **180 tests**, **97.1%** coverage on `app/`
+- LLM quality benchmark (DeepEval): cases 1 and 10 via `python -m app.scripts.run_deepeval`
 
 Not yet implemented:
 
-- Load tests and quality benchmarks
+- Load tests
+- Full 10-case DeepEval suite (cases 2–9)
 
 Manual step before RAG answers work: place HP PDFs in `rag-docs/` and run the ingest CLI (see [RAG and document corpus](#rag-and-document-corpus)).

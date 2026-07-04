@@ -2,6 +2,9 @@ from dataclasses import dataclass
 
 from app.rag.loaders.pdf import DocumentPage
 
+DEFAULT_CHUNK_SIZE = 1000
+DEFAULT_CHUNK_OVERLAP = 200
+
 
 @dataclass(frozen=True)
 class TextChunk:
@@ -14,8 +17,8 @@ class TextChunk:
 def chunk_text(
     text: str,
     *,
-    chunk_size: int = 1000,
-    chunk_overlap: int = 200,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[str]:
     _validate_chunk_params(chunk_size, chunk_overlap)
 
@@ -50,8 +53,8 @@ def chunk_text(
 def chunk_pages(
     pages: list[DocumentPage],
     *,
-    chunk_size: int = 1000,
-    chunk_overlap: int = 200,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[TextChunk]:
     _validate_chunk_params(chunk_size, chunk_overlap)
 

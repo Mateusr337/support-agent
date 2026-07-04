@@ -1,0 +1,74 @@
+---
+description: LLM quality benchmark conventions (DeepEval, outside pytest/coverage)
+globs: backend/eval/**,backend/app/scripts/run_deepeval.py,usecases/agent-manual-tests.md
+alwaysApply: false
+---
+
+# LLM Evaluation (DeepEval)
+
+Standalone benchmark for LLM response quality. **Not** part of pytest or coverage.
+
+## Layout
+
+| Path | Role |
+|------|------|
+| `backend/eval/dataset.py` | `EvalCase` definitions (question, expected_output, expected_source) |
+| `backend/eval/runner.py` | HTTP client: auth, SSE chat, audit log extraction |
+| `backend/eval/metrics.py` | DeepEval metrics per case (judge: gpt-4o) |
+| `backend/eval/run_deepeval.py` | CLI logic and JSON report |
+| `backend/eval/cleanup.py` | Delete eval users from Postgres (cascade) |
+| `backend/app/scripts/run_deepeval.py` | Thin entry point only |
+| `usecases/agent-manual-tests.md` | Human-readable spec for all 10 cases |
+
+## Isolation rules
+
+- Keep all eval code in `backend/eval/` — never under `app/` except the thin script wrapper.
+- Do **not** add eval tests to `tests/` or register eval in `pytest.ini`.
+- Do **not** add DeepEval to `requirements.txt` (Docker prod image); dev only in `requirements-dev.txt`.
+- Generated artifacts (`eval_report.json`, `.deepeval/`) are gitignored.
+
+## Running
+
+Requires live stack + ingested PDFs + `OPENAI_API_KEY`:
+
+```bash
+docker compose up --build
+docker compose exec backend python -m app.scripts.ingest_documents --force
+cd backend && python -m app.scripts.run_deepeval --base-url http://localhost:8000
+```
+
+Eval users (`eval_*@test.com`) are deleted automatically after each run (cascade removes sessions, messages, audit logs). Use `--keep-eval-data` to retain them for debugging. Cleanup uses `DATABASE_URL` from `backend/.env` — it must match the same Postgres as the API (Docker Compose maps db to host port **5400**, not 5432; see `backend/.env.example`).
+
+Remove stale eval users from past runs:
+
+```bash
+cd backend && python -c "from eval.cleanup import delete_stale_eval_users; print(delete_stale_eval_users())"
+```
+
+## Adding a new case
+
+1. Add the scenario to `usecases/agent-manual-tests.md` (question, expected source, pass criteria).
+2. Append an `EvalCase` to `EVAL_CASES` in `backend/eval/dataset.py`.
+3. Register metrics in `backend/eval/metrics.py` via `_METRICS_BY_CASE`.
+4. Re-run the benchmark and update the results table in `README.md`.
+
+## Metric conventions
+
+- **Pass gate** (case pass/fail): `FaithfulnessMetric` + case-specific `GEval` only.
+- **Informational** (reported, not gating): `AnswerRelevancyMetric`, `ContextualRelevancyMetric`, `HallucinationMetric`.
+- Use `LLMTestCaseParams` for `GEval` (deepeval 3.x; requires `openai>=1.68.0`).
+- Judge model: `GPTModel(model="gpt-4o")` — configure once in `metrics.py`.
+
+## Runner conventions
+
+- One fresh chat session per case (no history bleed).
+- Parse SSE from `POST /api/v1/chat/conversations/{id}/messages` (`turn_started` → `done`).
+- Build `retrieval_context` from audit log `"Tool Result"` entries (`data.results[].text`).
+- Set both `retrieval_context` and `context` on `LLMTestCase` (Faithfulness vs Hallucination metrics).
+- Record `completion_time_ms` per case (end-to-end chat request) and include audit-log `latency_ms` breakdown for LLM/tool calls in the report.
+
+## Do not
+
+- Mock the LLM or RAG in eval — this is an integration benchmark against the live API.
+- Couple eval logic into `ChatService`, agents, or routes.
+- Fail `pytest` or lower coverage when extending the eval suite.

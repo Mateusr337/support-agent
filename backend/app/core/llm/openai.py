@@ -1,4 +1,5 @@
 import json
+import time
 from collections.abc import AsyncIterator
 from uuid import UUID
 
@@ -50,7 +51,9 @@ class OpenAILLMProvider:
             },
         )
 
+        start = time.perf_counter()
         response = await self._client.chat.completions.create(**request_kwargs)
+        latency_ms = round((time.perf_counter() - start) * 1000)
         assistant_message = response.choices[0].message
         tool_calls = self._parse_tool_calls(assistant_message.tool_calls)
         completion = ChatCompletion(
@@ -71,6 +74,7 @@ class OpenAILLMProvider:
             data={
                 "model": self._model,
                 "content": completion.content,
+                "latency_ms": latency_ms,
                 "tool_calls": [
                     {
                         "id": tool_call.id,
@@ -134,6 +138,7 @@ class OpenAILLMProvider:
             stream=True,
             stream_options={"include_usage": True},
         )
+        stream_start = time.perf_counter()
 
         content_parts: list[str] = []
         usage = None
@@ -150,6 +155,8 @@ class OpenAILLMProvider:
         if not content:
             raise RuntimeError("OpenAI returned an empty streamed response")
 
+        stream_latency_ms = round((time.perf_counter() - stream_start) * 1000)
+
         self._audit_info(
             audit_log,
             session_id=session_id,
@@ -160,6 +167,7 @@ class OpenAILLMProvider:
             data={
                 "model": self._model,
                 "content": content,
+                "latency_ms": stream_latency_ms,
             },
         )
 

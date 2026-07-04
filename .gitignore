@@ -9,5 +9,5 @@ postgres_data
 .pytest_cache
 .coverage
 htmlcov
-rag-docs/*
-!rag-docs/.gitkeep
+eval_report.json
+.deepeval/

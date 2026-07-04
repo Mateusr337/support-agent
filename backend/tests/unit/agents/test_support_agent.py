@@ -244,6 +244,7 @@ def test_search_documents_tool_logs_tool_call_and_result():
     assert tool_call["data"]["query"] == "reset printer"
     assert tool_result["type"] == "Tool Result"
     assert tool_result["data"]["result_count"] == 1
+    assert isinstance(tool_result["data"]["latency_ms"], int)
     assert tool_result["data"]["results"][0] == {
         "source": "manual.pdf",
         "page_number": 2,

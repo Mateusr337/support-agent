@@ -110,6 +110,9 @@ def test_chat_logs_audit_entries_when_context_is_provided():
 
     assert result == ChatCompletion(content="Done")
     assert audit_log.info.call_count == 3
+    response_log = audit_log.info.call_args_list[1].kwargs
+    assert response_log["message"] == "LLM response"
+    assert isinstance(response_log["data"]["latency_ms"], int)
 
 
 def test_chat_stream_yields_token_deltas():
@@ -174,6 +177,12 @@ def test_chat_stream_logs_token_usage_when_context_is_provided():
 
     assert tokens == ["Hello"]
     assert audit_log.info.call_count == 3
+    stream_response = next(
+        call.kwargs
+        for call in audit_log.info.call_args_list
+        if call.kwargs.get("message") == "LLM stream response"
+    )
+    assert isinstance(stream_response["data"]["latency_ms"], int)
     audit_log.info.assert_any_call(
         session_id=session_id,
         user_id=1,
