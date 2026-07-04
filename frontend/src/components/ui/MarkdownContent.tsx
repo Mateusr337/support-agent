@@ -4,11 +4,12 @@ import "./MarkdownContent.css";
 
 interface MarkdownContentProps {
   content: string;
+  showCursor?: boolean;
 }
 
-export default function MarkdownContent({ content }: MarkdownContentProps) {
+export default function MarkdownContent({ content, showCursor = false }: MarkdownContentProps) {
   return (
-    <div className="markdown-content">
+    <div className={`markdown-content${showCursor ? " markdown-content--streaming" : ""}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>
   );

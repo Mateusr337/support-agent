@@ -27,39 +27,74 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
 function toolStatusLabel(toolName: string): string {
   if (toolName === "search_documents") {
-    return "Searching documents…";
+    return "Searching HP manuals";
   }
-  return `Running ${toolName}…`;
+  return `Running ${toolName.replace(/_/g, " ")}`;
+}
+
+type StreamingPhase = "thinking" | "searching" | "writing";
+
+function getStreamingPhase(streaming: StreamingState): StreamingPhase {
+  if (streaming.content.length > 0) {
+    return "writing";
+  }
+  if (streaming.tool !== null) {
+    return "searching";
+  }
+  return "thinking";
+}
+
+function streamingStatusLabel(phase: StreamingPhase, toolName: string | null): string {
+  if (phase === "thinking") {
+    return "Thinking";
+  }
+  if (phase === "searching" && toolName) {
+    return toolStatusLabel(toolName);
+  }
+  return "Preparing response";
 }
 
 interface StreamingBubbleProps {
   streaming: StreamingState;
 }
 
+function StreamingSkeleton() {
+  return (
+    <div className="stream-skeleton" aria-hidden="true">
+      <span className="stream-skeleton-line stream-skeleton-line-long" />
+      <span className="stream-skeleton-line stream-skeleton-line-medium" />
+    </div>
+  );
+}
+
 function StreamingBubble({ streaming }: StreamingBubbleProps) {
-  const showStatus = streaming.tool !== null && streaming.content.length === 0;
+  const phase = getStreamingPhase(streaming);
+  const isWriting = phase === "writing";
+  const statusLabel = streamingStatusLabel(phase, streaming.tool);
 
   return (
-    <div className="message-row message-row-bot">
-      <div className="message-avatar" aria-hidden="true">
+    <div className="message-row message-row-bot message-row-streaming">
+      <div className="message-avatar message-avatar-active" aria-hidden="true">
         HP
       </div>
-      <div className="message-bubble message-bubble-bot">
-        {showStatus && (
-          <p className="message-stream-status" role="status">
-            {toolStatusLabel(streaming.tool!)}
-          </p>
-        )}
-        {streaming.content.length > 0 ? (
-          <MarkdownContent content={streaming.content} />
-        ) : (
-          !showStatus && (
-            <div className="message-typing" aria-label="Assistant is typing">
-              <span />
-              <span />
-              <span />
+      <div className={`message-bubble message-bubble-bot message-bubble-streaming${isWriting ? "" : " message-bubble-streaming-compact"}`}>
+        {!isWriting && (
+          <>
+            <div className="stream-status" role="status" aria-live="polite">
+              <span className="stream-status-indicator" aria-hidden="true">
+                <span className="stream-status-dot" />
+                <span className="stream-status-dot" />
+                <span className="stream-status-dot" />
+              </span>
+              <span className="stream-status-label">{statusLabel}</span>
             </div>
-          )
+            <StreamingSkeleton />
+          </>
+        )}
+        {isWriting && (
+          <div className="stream-content" aria-live="polite" aria-busy="true">
+            <MarkdownContent content={streaming.content} showCursor />
+          </div>
         )}
       </div>
     </div>

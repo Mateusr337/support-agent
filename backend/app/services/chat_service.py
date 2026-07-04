@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
-from app.agents.support_agent import SupportAgent
+from app.agents.support import SupportAgent
 from app.core.llm.base import Message
 from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession

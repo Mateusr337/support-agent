@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.agents.fake_support_agent import FAKE_AGENT_REPLY, FakeSupportAgent
+from app.agents.support import FAKE_AGENT_REPLY, FakeSupportAgent
 from app.api.v1.dependencies import get_support_agent
 from app.core.database import Base, get_db
 from app.main import app

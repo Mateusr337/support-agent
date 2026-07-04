@@ -3,9 +3,8 @@ from functools import lru_cache
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from app.agents.fake_support_agent import FakeSupportAgent
 from app.agents.registry import build_agent
-from app.agents.support_agent import SupportAgent
+from app.agents.support import FakeSupportAgent, SupportAgent
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.llm.factory import get_llm_provider

@@ -112,8 +112,10 @@ backend/
 │   ├── agents/                     # Agent orchestration — see Agents module
 │   │   ├── base.py                 # AgentConfig, ToolBinding
 │   │   ├── registry.py             # build_agent(name); wires tools + LLM
-│   │   ├── support_agent.py        # LLM loop + tool invocation
-│   │   └── prompts.py
+│   │   └── support/                # Support agent implementation
+│   │       ├── agent.py            # LLM loop + tool invocation
+│   │       ├── prompts.py
+│   │       └── fake.py             # load-test stub
 │   │
 │   └── services/                   # Domain business logic — see Services
 │       ├── user_service.py
@@ -288,7 +290,7 @@ class AgentConfig:
 
 ```
 Client → api/v1/chat (SSE) → ChatService.process_message_stream → repositories → PostgreSQL
-                              ↘ agents/support_agent.reply_stream → core/llm/
+                              ↘ agents/support/agent.reply_stream → core/llm/
                                                                     ↘ tools/ (search_documents)
 ```
 
@@ -298,7 +300,7 @@ See `.cursor/rules/chat-sse-streaming.mdc` and `docs/chat-sse-streaming.md`.
 
 ```
 Client → api/v1/chat → ChatService → repositories → PostgreSQL
-                              ↘ agents/support_agent → core/llm/
+                              ↘ agents/support/agent → core/llm/
                                                        ↘ tools/ (NoOp / search_documents)
 ```
 
@@ -306,7 +308,7 @@ Client → api/v1/chat → ChatService → repositories → PostgreSQL
 
 ```
 Client → api/v1/chat → ChatService → repositories → PostgreSQL
-                              ↘ agents/support_agent
+                              ↘ agents/support/agent
                                     ↘ tools/search_documents
                                           ↘ rag/service
                                                 ↘ repositories/vector_repository → Qdrant
@@ -326,7 +328,7 @@ rag-docs/*.pdf
 **Search (online, chat):**
 
 ```
-User message → agents/support_agent → tools/search_documents
+User message → agents/support/agent → tools/search_documents
   → RagService.search() → vector_repository → Qdrant
   → LLM (context from retrieved chunks only; no direct file access)
 ```
@@ -384,8 +386,8 @@ Run with in-memory SQLite (`conftest.py` overrides `get_db`). Coverage policy: s
 | PDF loader / chunking | `rag/loaders/`, `rag/chunking.py` |
 | RAG ingest + search | `rag/service.py` |
 | New tool | `tools/<tool_name>.py` + register in `tools/registry.py` |
-| New agent | `agents/<name>_agent.py` + register in `agents/registry.py` |
-| Agent prompt | `agents/prompts.py` or `agents/<name>/prompts.py` when split |
+| New agent | `agents/<name>/agent.py` + register in `agents/registry.py` |
+| Agent prompt | `agents/<name>/prompts.py` |
 | Ingest CLI | `app/scripts/ingest_documents.py` |
 | Unit test | `tests/unit/<layer>/test_<module>.py` |
 | API test | `tests/api/test_<feature>.py` |

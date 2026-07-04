@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.agents.registry import AGENTS, UnknownAgentError, build_agent
-from app.agents.support_agent import SupportAgent
+from app.agents.support import SupportAgent
 
 
 def test_agents_catalog_contains_support():

@@ -1,6 +1,6 @@
 ---
 description: Chat SSE streaming contract, layers, and change conventions
-globs: backend/app/core/streaming/**,backend/app/api/v1/chat/**,backend/app/services/chat_service.py,backend/app/agents/support_agent.py,backend/app/core/llm/**,frontend/src/features/chat/**,frontend/src/services/chatService.ts,frontend/src/types/chat.ts,docs/chat-sse-streaming.md
+globs: backend/app/core/streaming/**,backend/app/api/v1/chat/**,backend/app/services/chat_service.py,backend/app/agents/support/**,backend/app/core/llm/**,frontend/src/features/chat/**,frontend/src/services/chatService.ts,frontend/src/types/chat.ts,docs/chat-sse-streaming.md
 alwaysApply: false
 ---
 
@@ -32,7 +32,7 @@ Wire format: `event: message` + `data: {json}` (discriminate by JSON `type`).
 | `app/core/streaming/sse.py` | `format_sse()`, shared SSE headers |
 | `app/api/v1/chat/routes.py` | `StreamingResponse`; validate session **before** stream (404/400 HTTP) |
 | `app/services/chat_service.py` | `process_message_stream()` — `turn_started`, persist messages, `done` |
-| `app/agents/support_agent.py` | `reply_stream()` — `tool_call`, `token` |
+| `app/agents/support/agent.py` | `reply_stream()` — `tool_call`, `token` |
 | `app/core/llm/` | `chat()` for tool turns; `chat_stream()` for final answer tokens |
 | `frontend/src/services/chatService.ts` | `fetch` + SSE parser (not `EventSource` — JWT POST) |
 | `frontend/src/features/chat/` | `streaming` state, draft bubble UI |

@@ -2,9 +2,9 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-from app.agents.prompts import SYSTEM_PROMPT
 from app.agents.registry import AGENTS, UnknownAgentError, build_agent
-from app.agents.support_agent import SupportAgent
+from app.agents.support import SupportAgent
+from app.agents.support.prompts import SYSTEM_PROMPT
 from app.core.llm.base import ChatCompletion, Message, ToolCallRequest
 from app.tools.base import RetrievedChunk, ToolContext
 from app.tools.registry import ToolDeps, build_tool_set

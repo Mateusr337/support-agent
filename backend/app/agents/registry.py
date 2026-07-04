@@ -1,6 +1,6 @@
 from app.agents.base import AgentConfig
-from app.agents.prompts import SYSTEM_PROMPT
-from app.agents.support_agent import SupportAgent
+from app.agents.support.agent import SupportAgent
+from app.agents.support.prompts import SYSTEM_PROMPT
 from app.core.llm.base import LLMProvider
 from app.rag.service import get_rag_service
 from app.tools.registry import ToolDeps, build_tool_set
