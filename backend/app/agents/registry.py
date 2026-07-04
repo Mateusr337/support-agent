@@ -15,6 +15,7 @@ AGENTS: dict[str, AgentConfig] = {
         name="support",
         prompt=SYSTEM_PROMPT,
         tools=("search_documents",),
+        max_tool_loop_iterations=3,
     ),
 }
 

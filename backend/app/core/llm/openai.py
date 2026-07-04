@@ -5,7 +5,7 @@ from uuid import UUID
 
 from openai import AsyncOpenAI
 
-from app.core.llm.base import ChatCompletion, Message, ToolCallRequest
+from app.core.llm.base import ChatCompletion, ChatStreamEvent, Message, ToolCallRequest
 from app.services.audit_log_service import AuditLogService
 from app.tools.base import ToolDefinition
 
@@ -109,12 +109,22 @@ class OpenAILLMProvider:
         messages: list[Message],
         *,
         temperature: float = 0.2,
+        tools: list[ToolDefinition] | None = None,
         audit_log: AuditLogService | None = None,
         session_id: UUID | None = None,
         user_id: int | None = None,
         turn_id: UUID | None = None,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[ChatStreamEvent]:
         history = [self._to_openai_message(message) for message in messages]
+        request_kwargs: dict = {
+            "model": self._model,
+            "messages": history,
+            "temperature": temperature,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+        if tools:
+            request_kwargs["tools"] = [self._to_openai_tool(tool) for tool in tools]
 
         self._audit_info(
             audit_log,
@@ -128,32 +138,45 @@ class OpenAILLMProvider:
                 "temperature": temperature,
                 "message_count": len(messages),
                 "messages": history,
+                "tool_count": len(tools or []),
             },
         )
 
-        stream = await self._client.chat.completions.create(
-            model=self._model,
-            messages=history,
-            temperature=temperature,
-            stream=True,
-            stream_options={"include_usage": True},
-        )
+        stream = await self._client.chat.completions.create(**request_kwargs)
         stream_start = time.perf_counter()
 
         content_parts: list[str] = []
+        tool_call_builders: dict[int, dict[str, str]] = {}
         usage = None
         async for chunk in stream:
             if chunk.choices:
-                delta = chunk.choices[0].delta.content
-                if delta:
-                    content_parts.append(delta)
-                    yield delta
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    content_parts.append(delta.content)
+                    yield ChatStreamEvent(content=delta.content)
+                if delta.tool_calls:
+                    for tool_call_delta in delta.tool_calls:
+                        builder = tool_call_builders.setdefault(
+                            tool_call_delta.index,
+                            {"id": "", "name": "", "arguments": ""},
+                        )
+                        if tool_call_delta.id:
+                            builder["id"] = tool_call_delta.id
+                        if tool_call_delta.function:
+                            if tool_call_delta.function.name:
+                                builder["name"] = tool_call_delta.function.name
+                            if tool_call_delta.function.arguments:
+                                builder["arguments"] += tool_call_delta.function.arguments
             if chunk.usage is not None:
                 usage = chunk.usage
 
         content = "".join(content_parts)
-        if not content:
+        tool_calls = self._parse_streamed_tool_calls(tool_call_builders)
+        if not content and not tool_calls:
             raise RuntimeError("OpenAI returned an empty streamed response")
+
+        if tool_calls:
+            yield ChatStreamEvent(tool_calls=tool_calls)
 
         stream_latency_ms = round((time.perf_counter() - stream_start) * 1000)
 
@@ -168,6 +191,14 @@ class OpenAILLMProvider:
                 "model": self._model,
                 "content": content,
                 "latency_ms": stream_latency_ms,
+                "tool_calls": [
+                    {
+                        "id": tool_call.id,
+                        "name": tool_call.name,
+                        "arguments": tool_call.arguments,
+                    }
+                    for tool_call in tool_calls
+                ],
             },
         )
 
@@ -226,6 +257,26 @@ class OpenAILLMProvider:
                 ToolCallRequest(
                     id=tool_call.id,
                     name=tool_call.function.name,
+                    arguments=arguments,
+                )
+            )
+        return tuple(parsed)
+
+    def _parse_streamed_tool_calls(
+        self,
+        tool_call_builders: dict[int, dict[str, str]],
+    ) -> tuple[ToolCallRequest, ...]:
+        if not tool_call_builders:
+            return ()
+
+        parsed: list[ToolCallRequest] = []
+        for index in sorted(tool_call_builders):
+            builder = tool_call_builders[index]
+            arguments = json.loads(builder["arguments"] or "{}")
+            parsed.append(
+                ToolCallRequest(
+                    id=builder["id"],
+                    name=builder["name"],
                     arguments=arguments,
                 )
             )

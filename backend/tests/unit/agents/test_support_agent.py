@@ -5,7 +5,7 @@ from uuid import uuid4
 from app.agents.registry import AGENTS, UnknownAgentError, build_agent
 from app.agents.support import SupportAgent
 from app.agents.support.prompts import SYSTEM_PROMPT
-from app.core.llm.base import ChatCompletion, Message, ToolCallRequest
+from app.core.llm.base import ChatStreamEvent, Message, ToolCallRequest
 from app.tools.base import RetrievedChunk, ToolContext
 from app.tools.registry import ToolDeps, build_tool_set
 from app.tools.search_documents import DEFAULT_SCORE_THRESHOLD, DEFAULT_TOP_K, SearchDocumentsTool
@@ -36,12 +36,14 @@ def _build_test_agent(
 
 def test_reply_runs_tool_loop_and_returns_final_answer():
     captured_messages: list[list[Message]] = []
+    stream_calls = 0
 
-    async def fake_chat(messages, **kwargs):
+    async def fake_chat_stream(messages, **kwargs):
+        nonlocal stream_calls
+        stream_calls += 1
         captured_messages.append(list(messages))
-        if len(captured_messages) == 1:
-            return ChatCompletion(
-                content=None,
+        if kwargs.get("tools"):
+            yield ChatStreamEvent(
                 tool_calls=(
                     ToolCallRequest(
                         id="call_1",
@@ -50,13 +52,10 @@ def test_reply_runs_tool_loop_and_returns_final_answer():
                     ),
                 ),
             )
-        return ChatCompletion(content="Reset the printer.")
-
-    async def fake_chat_stream(messages, **kwargs):
-        yield "Reset the printer."
+            return
+        yield ChatStreamEvent(content="Reset the printer.")
 
     llm = MagicMock()
-    llm.chat = AsyncMock(side_effect=fake_chat)
     llm.chat_stream = fake_chat_stream
     searcher = FakeSearcher(
         chunks=[
@@ -81,12 +80,7 @@ def test_reply_runs_tool_loop_and_returns_final_answer():
     assert result == "Reset the printer."
     assert searcher.last_query == "How do I reset my printer?"
     assert searcher.last_top_k == DEFAULT_TOP_K
-    assert llm.chat.await_count == 1
-
-    first_call = llm.chat.await_args_list[0]
-    assert first_call.kwargs["temperature"] == 0.1
-    assert len(first_call.kwargs["tools"]) == 1
-    assert first_call.kwargs["tools"][0].name == "search_documents"
+    assert stream_calls == 2
 
     first_messages = captured_messages[0]
     assert first_messages[0].role == "system"
@@ -96,24 +90,26 @@ def test_reply_runs_tool_loop_and_returns_final_answer():
 
 
 def test_reply_stream_emits_tool_call_and_tokens():
-    async def fake_chat(messages, **kwargs):
-        return ChatCompletion(
-            content=None,
-            tool_calls=(
-                ToolCallRequest(
-                    id="call_1",
-                    name="search_documents",
-                    arguments={"query": "battery specs"},
-                ),
-            ),
-        )
+    stream_calls = 0
 
     async def fake_chat_stream(messages, **kwargs):
-        yield "The "
-        yield "battery."
+        nonlocal stream_calls
+        stream_calls += 1
+        if kwargs.get("tools"):
+            yield ChatStreamEvent(
+                tool_calls=(
+                    ToolCallRequest(
+                        id="call_1",
+                        name="search_documents",
+                        arguments={"query": "battery specs"},
+                    ),
+                ),
+            )
+            return
+        yield ChatStreamEvent(content="The ")
+        yield ChatStreamEvent(content="battery.")
 
     llm = MagicMock()
-    llm.chat = AsyncMock(side_effect=fake_chat)
     llm.chat_stream = fake_chat_stream
     agent, _ = _build_test_agent(llm, FakeSearcher())
 
@@ -130,11 +126,19 @@ def test_reply_stream_emits_tool_call_and_tokens():
         {"type": "token", "content": "The "},
         {"type": "token", "content": "battery."},
     ]
+    assert stream_calls == 2
 
 
-def test_reply_stream_emits_single_token_for_direct_answer():
+def test_reply_stream_emits_tokens_for_direct_answer():
+    stream_calls = 0
+
+    async def fake_chat_stream(messages, **kwargs):
+        nonlocal stream_calls
+        stream_calls += 1
+        yield ChatStreamEvent(content="Hello! How can I help?")
+
     llm = MagicMock()
-    llm.chat = AsyncMock(return_value=ChatCompletion(content="Hello! How can I help?"))
+    llm.chat_stream = fake_chat_stream
     agent, searcher = _build_test_agent(llm, FakeSearcher())
 
     async def collect_events():
@@ -147,27 +151,104 @@ def test_reply_stream_emits_single_token_for_direct_answer():
 
     assert events == [{"type": "token", "content": "Hello! How can I help?"}]
     assert searcher.last_query is None
-    llm.chat.assert_awaited_once()
+    assert stream_calls == 1
 
 
 def test_reply_returns_direct_answer_when_llm_skips_tools():
+    async def fake_chat_stream(messages, **kwargs):
+        yield ChatStreamEvent(content="Hello! How can I help?")
+
     llm = MagicMock()
-    llm.chat = AsyncMock(return_value=ChatCompletion(content="Hello! How can I help?"))
+    llm.chat_stream = fake_chat_stream
     agent, searcher = _build_test_agent(llm, FakeSearcher())
 
     result = asyncio.run(agent.reply("Hi"))
 
     assert result == "Hello! How can I help?"
     assert searcher.last_query is None
-    llm.chat.assert_awaited_once()
+
+
+def test_reply_stream_runs_multiple_tool_rounds_before_final_stream():
+    stream_calls = 0
+
+    async def fake_chat_stream(messages, **kwargs):
+        nonlocal stream_calls
+        stream_calls += 1
+        if kwargs.get("tools"):
+            query = "first query" if stream_calls == 1 else "refined query"
+            yield ChatStreamEvent(
+                tool_calls=(
+                    ToolCallRequest(
+                        id=f"call_{stream_calls}",
+                        name="search_documents",
+                        arguments={"query": query},
+                    ),
+                ),
+            )
+            return
+        yield ChatStreamEvent(content="Final answer.")
+
+    llm = MagicMock()
+    llm.chat_stream = fake_chat_stream
+    searcher = FakeSearcher()
+    agent, searcher = _build_test_agent(llm, searcher)
+
+    async def collect_events():
+        events = []
+        async for event in agent.reply_stream("Question"):
+            events.append(event)
+        return events
+
+    events = asyncio.run(collect_events())
+
+    assert events == [
+        {"type": "tool_call", "name": "search_documents"},
+        {"type": "tool_call", "name": "search_documents"},
+        {"type": "token", "content": "Final answer."},
+    ]
+    assert stream_calls == 3
+    assert searcher.last_query == "refined query"
+
+
+def test_reply_stream_uses_final_iteration_without_tools():
+    tools_passed: list[bool] = []
+
+    async def fake_chat_stream(messages, **kwargs):
+        tools_passed.append(kwargs.get("tools") is not None)
+        if kwargs.get("tools"):
+            yield ChatStreamEvent(
+                tool_calls=(
+                    ToolCallRequest(
+                        id="call_1",
+                        name="search_documents",
+                        arguments={"query": "test"},
+                    ),
+                ),
+            )
+            return
+        yield ChatStreamEvent(content="Done.")
+
+    llm = MagicMock()
+    llm.chat_stream = fake_chat_stream
+    agent, _ = _build_test_agent(llm, FakeSearcher())
+
+    asyncio.run(agent.reply("Question"))
+
+    assert tools_passed == [True, True, False]
 
 
 def test_reply_passes_audit_context_to_llm():
-    llm = MagicMock()
-    llm.chat = AsyncMock(return_value=ChatCompletion(content="Done"))
     audit_log = MagicMock()
     session_id = uuid4()
     turn_id = uuid4()
+    captured_kwargs: dict = {}
+
+    async def fake_chat_stream(messages, **kwargs):
+        captured_kwargs.update(kwargs)
+        yield ChatStreamEvent(content="Done")
+
+    llm = MagicMock()
+    llm.chat_stream = fake_chat_stream
     agent, _ = _build_test_agent(llm, FakeSearcher())
 
     asyncio.run(
@@ -180,15 +261,11 @@ def test_reply_passes_audit_context_to_llm():
         )
     )
 
-    llm.chat.assert_awaited_once_with(
-        llm.chat.await_args.args[0],
-        temperature=0.2,
-        tools=llm.chat.await_args.kwargs["tools"],
-        audit_log=audit_log,
-        session_id=session_id,
-        user_id=7,
-        turn_id=turn_id,
-    )
+    assert captured_kwargs["audit_log"] is audit_log
+    assert captured_kwargs["session_id"] == session_id
+    assert captured_kwargs["user_id"] == 7
+    assert captured_kwargs["turn_id"] == turn_id
+    assert captured_kwargs["temperature"] == 0.2
 
 
 def test_search_documents_tool_uses_default_top_k():
@@ -278,4 +355,4 @@ def test_support_agent_config_uses_system_prompt():
 
     assert config.prompt == SYSTEM_PROMPT
     assert config.tool_names == ("search_documents",)
-    assert config.max_tool_loop_iterations == 2
+    assert config.max_tool_loop_iterations == 3

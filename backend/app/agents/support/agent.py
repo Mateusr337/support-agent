@@ -57,58 +57,49 @@ class SupportAgent:
         )
         tool_definitions = [self._tools[name].definition for name in self._config.tools]
         messages = self._build_messages(user_message, history or [])
-        used_tools = False
+        max_iterations = self._config.max_tool_loop_iterations
+        llm_kwargs = {
+            "temperature": temperature,
+            "audit_log": audit_log,
+            "session_id": session_id,
+            "user_id": user_id,
+            "turn_id": turn_id,
+        }
 
-        for _ in range(self._config.max_tool_loop_iterations):
-            if used_tools:
-                async for token in self._llm.chat_stream(
-                    messages,
-                    temperature=temperature,
-                    audit_log=audit_log,
-                    session_id=session_id,
-                    user_id=user_id,
-                    turn_id=turn_id,
-                ):
-                    yield {"type": "token", "content": token}
+        for iteration in range(max_iterations):
+            is_last_iteration = iteration == max_iterations - 1
+            stream_tools = None if is_last_iteration else (tool_definitions or None)
+            tool_calls: tuple[ToolCallRequest, ...] = ()
+
+            async for event in self._llm.chat_stream(
+                messages,
+                tools=stream_tools,
+                **llm_kwargs,
+            ):
+                if event.content:
+                    yield {"type": "token", "content": event.content}
+                if event.tool_calls:
+                    tool_calls = event.tool_calls
+
+            if not tool_calls:
                 return
 
-            completion = await self._llm.chat(
-                messages,
-                temperature=temperature,
-                tools=tool_definitions or None,
-                audit_log=audit_log,
-                session_id=session_id,
-                user_id=user_id,
-                turn_id=turn_id,
+            messages.append(
+                Message(
+                    role="assistant",
+                    content="",
+                    tool_calls=tool_calls,
+                )
             )
-
-            if completion.tool_calls:
-                used_tools = True
+            for tool_call in tool_calls:
+                yield {"type": "tool_call", "name": tool_call.name}
                 messages.append(
                     Message(
-                        role="assistant",
-                        content=completion.content or "",
-                        tool_calls=completion.tool_calls,
+                        role="tool",
+                        content=await self._run_tool_call(tool_call, tool_context),
+                        tool_call_id=tool_call.id,
                     )
                 )
-                for tool_call in completion.tool_calls:
-                    yield {"type": "tool_call", "name": tool_call.name}
-                    messages.append(
-                        Message(
-                            role="tool",
-                            content=await self._run_tool_call(tool_call, tool_context),
-                            tool_call_id=tool_call.id,
-                        )
-                    )
-                continue
-
-            if completion.content:
-                yield {"type": "token", "content": completion.content}
-                return
-
-            raise RuntimeError("LLM returned an empty response")
-
-        raise RuntimeError("Maximum tool loop iterations exceeded")
 
     async def _run_tool_call(
         self,

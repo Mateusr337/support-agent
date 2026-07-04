@@ -22,6 +22,9 @@ class ChatSessionFinalizedError(Exception):
     pass
 
 
+LLM_HISTORY_MESSAGE_LIMIT = 15
+
+
 @dataclass(frozen=True)
 class ProcessMessageResult:
     user_message: ChatMessage
@@ -99,7 +102,10 @@ class ChatService:
         try:
             session.updated_at = datetime.now(UTC)
 
-            prior_messages, _ = self._message_repository.list_by_session_id(session_id)
+            prior_messages, _ = self._message_repository.list_by_session_id(
+                session_id,
+                limit=LLM_HISTORY_MESSAGE_LIMIT,
+            )
             history = self._to_llm_history(prior_messages)
 
             self._message_repository.create(

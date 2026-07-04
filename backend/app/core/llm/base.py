@@ -22,6 +22,12 @@ class ChatCompletion:
 
 
 @dataclass(frozen=True)
+class ChatStreamEvent:
+    content: str | None = None
+    tool_calls: tuple[ToolCallRequest, ...] = ()
+
+
+@dataclass(frozen=True)
 class Message:
     role: str
     content: str
@@ -47,8 +53,9 @@ class LLMProvider(Protocol):
         messages: list[Message],
         *,
         temperature: float = 0.2,
+        tools: "list[ToolDefinition] | None" = None,
         audit_log: "AuditLogService | None" = None,
         session_id: UUID | None = None,
         user_id: int | None = None,
         turn_id: UUID | None = None,
-    ) -> AsyncIterator[str]: ...
+    ) -> AsyncIterator["ChatStreamEvent"]: ...

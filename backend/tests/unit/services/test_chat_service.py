@@ -14,6 +14,7 @@ from app.services.chat_service import (
     ChatService,
     ChatSessionFinalizedError,
     ChatSessionNotFoundError,
+    LLM_HISTORY_MESSAGE_LIMIT,
 )
 
 
@@ -141,6 +142,35 @@ def test_process_message_stream_passes_prior_history(db_session):
         Message(role="user", content="First question"),
         Message(role="assistant", content="Agent reply"),
     ]
+
+
+def test_process_message_stream_caps_llm_history_to_last_fifteen_messages(db_session):
+    user = _create_user(db_session)
+    db_session.flush()
+
+    agent = FakeSupportAgent()
+    service = ChatService(db_session, agent)
+    session = service.create_session(user_id=user.id)
+
+    for index in range(1, 9):
+        _run_stream(
+            service,
+            session_id=session.id,
+            user_id=user.id,
+            content=f"Message {index}",
+        )
+
+    _run_stream(
+        service,
+        session_id=session.id,
+        user_id=user.id,
+        content="Message 9",
+    )
+
+    assert len(agent.last_history) == LLM_HISTORY_MESSAGE_LIMIT
+    assert Message(role="user", content="Message 1") not in agent.last_history
+    assert Message(role="user", content="Message 8") in agent.last_history
+    assert agent.last_history[-1] == Message(role="assistant", content="Agent reply")
 
 
 def test_process_message_stream_session_not_found_raises(db_session):

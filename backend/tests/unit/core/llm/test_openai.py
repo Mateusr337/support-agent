@@ -4,9 +4,10 @@ from uuid import uuid4
 
 import pytest
 
-from app.core.llm.base import ChatCompletion, Message
+from app.core.llm.base import ChatCompletion, ChatStreamEvent, Message, ToolCallRequest
 from app.core.llm.factory import get_llm_provider
 from app.core.llm.openai import OpenAILLMProvider
+from app.tools.base import ToolDefinition
 
 
 def _provider_with_mock_client(mock_client: MagicMock) -> OpenAILLMProvider:
@@ -118,10 +119,14 @@ def test_chat_logs_audit_entries_when_context_is_provided():
 def test_chat_stream_yields_token_deltas():
     async def fake_stream():
         chunk_one = MagicMock()
-        chunk_one.choices = [MagicMock(delta=MagicMock(content="Hello"))]
+        chunk_one.choices = [
+            MagicMock(delta=MagicMock(content="Hello", tool_calls=None))
+        ]
         chunk_one.usage = None
         chunk_two = MagicMock()
-        chunk_two.choices = [MagicMock(delta=MagicMock(content=" world"))]
+        chunk_two.choices = [
+            MagicMock(delta=MagicMock(content=" world", tool_calls=None))
+        ]
         chunk_two.usage = None
         yield chunk_one
         yield chunk_two
@@ -130,7 +135,7 @@ def test_chat_stream_yields_token_deltas():
     mock_client.chat.completions.create = AsyncMock(return_value=fake_stream())
 
     provider = _provider_with_mock_client(mock_client)
-    tokens = asyncio.run(_collect_stream(provider))
+    tokens, _ = asyncio.run(_collect_stream(provider))
 
     assert tokens == ["Hello", " world"]
     mock_client.chat.completions.create.assert_awaited_once_with(
@@ -142,10 +147,101 @@ def test_chat_stream_yields_token_deltas():
     )
 
 
+def test_chat_stream_passes_tools_when_provided():
+    async def fake_stream():
+        chunk = MagicMock()
+        chunk.choices = [MagicMock(delta=MagicMock(content="Done", tool_calls=None))]
+        chunk.usage = None
+        yield chunk
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=fake_stream())
+
+    tool = ToolDefinition(
+        name="search_documents",
+        description="Search manuals",
+        parameters={"type": "object", "properties": {}},
+    )
+
+    provider = _provider_with_mock_client(mock_client)
+    tokens = asyncio.run(_collect_stream(provider, tools=[tool]))
+
+    assert tokens == ["Done"]
+    mock_client.chat.completions.create.assert_awaited_once_with(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hi"}],
+        temperature=0.2,
+        stream=True,
+        stream_options={"include_usage": True},
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_documents",
+                    "description": "Search manuals",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ],
+    )
+
+
+def test_chat_stream_yields_tool_calls_from_stream_deltas():
+    async def fake_stream():
+        chunk_one = MagicMock()
+        chunk_one.choices = [
+            MagicMock(
+                delta=MagicMock(
+                    content=None,
+                    tool_calls=[
+                        MagicMock(
+                            index=0,
+                            id="call_1",
+                            function=MagicMock(name="search_documents", arguments='{"query":'),
+                        )
+                    ],
+                )
+            )
+        ]
+        chunk_one.usage = None
+        chunk_two = MagicMock()
+        chunk_two.choices = [
+            MagicMock(
+                delta=MagicMock(
+                    content=None,
+                    tool_calls=[
+                        MagicMock(
+                            index=0,
+                            id=None,
+                            function=MagicMock(name=None, arguments=' "reset"}'),
+                        )
+                    ],
+                )
+            )
+        ]
+        chunk_two.usage = None
+        yield chunk_one
+        yield chunk_two
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=fake_stream())
+    provider = _provider_with_mock_client(mock_client)
+
+    tokens, tool_calls = asyncio.run(_collect_stream(provider))
+
+    assert tokens == []
+    assert len(tool_calls) == 1
+    assert tool_calls[0].id == "call_1"
+    assert tool_calls[0].name == "search_documents"
+    assert tool_calls[0].arguments == {"query": "reset"}
+
+
 def test_chat_stream_logs_token_usage_when_context_is_provided():
     async def fake_stream():
         chunk_one = MagicMock()
-        chunk_one.choices = [MagicMock(delta=MagicMock(content="Hello"))]
+        chunk_one.choices = [
+            MagicMock(delta=MagicMock(content="Hello", tool_calls=None))
+        ]
         chunk_one.usage = None
         chunk_two = MagicMock()
         chunk_two.choices = []
@@ -165,7 +261,7 @@ def test_chat_stream_logs_token_usage_when_context_is_provided():
     turn_id = uuid4()
     provider = _provider_with_mock_client(mock_client)
 
-    tokens = asyncio.run(
+    tokens, _ = asyncio.run(
         _collect_stream(
             provider,
             audit_log=audit_log,
@@ -205,24 +301,32 @@ async def _collect_stream(
     session_id=None,
     user_id=None,
     turn_id=None,
-) -> list[str]:
+    tools=None,
+) -> tuple[list[str], tuple[ToolCallRequest, ...]]:
     tokens: list[str] = []
-    async for token in provider.chat_stream(
+    tool_calls: tuple[ToolCallRequest, ...] = ()
+    async for event in provider.chat_stream(
         [Message(role="user", content="Hi")],
         temperature=0.2,
+        tools=tools,
         audit_log=audit_log,
         session_id=session_id,
         user_id=user_id,
         turn_id=turn_id,
     ):
-        tokens.append(token)
-    return tokens
+        if event.content:
+            tokens.append(event.content)
+        if event.tool_calls:
+            tool_calls = event.tool_calls
+    return tokens, tool_calls
 
 
 def test_chat_stream_raises_when_empty():
     async def fake_stream():
         chunk = MagicMock()
-        chunk.choices = [MagicMock(delta=MagicMock(content=None))]
+        chunk.choices = [
+            MagicMock(delta=MagicMock(content=None, tool_calls=None))
+        ]
         chunk.usage = None
         yield chunk
 

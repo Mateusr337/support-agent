@@ -1,22 +1,22 @@
 {
-  "run_at": "2026-07-04T16:16:13.403221+00:00",
+  "run_at": "2026-07-04T21:41:44.035166+00:00",
   "base_url": "http://localhost:8000",
   "judge_model": "gpt-4o",
   "total_cases": 2,
-  "passed_cases": 2,
+  "passed_cases": 1,
   "cases": [
     {
       "id": 1,
       "name": "laptop_safety",
-      "passed": true,
-      "completion_time_ms": 3585,
+      "passed": false,
+      "completion_time_ms": 4604,
       "latency": {
         "llm_latency_ms": [
-          1065,
-          1266
+          772,
+          1540
         ],
         "tool_latency_ms": [
-          625
+          1767
         ]
       },
       "retrieved_sources": [
@@ -28,7 +28,7 @@
           "name": "Answer Relevancy",
           "score": 1.0,
           "passed": true,
-          "reason": "The score is 1.00 because the response perfectly addressed the question about using an OMEN laptop on a bed or lap for gaming sessions, with no irrelevant information included. Great job on staying focused and relevant!"
+          "reason": "The score is 1.00 because the response perfectly addressed the question about using an OMEN laptop on a bed or lap for extended gaming sessions, with no irrelevant information included. Great job on staying focused and relevant!"
         },
         {
           "name": "Faithfulness",
@@ -38,27 +38,27 @@
         },
         {
           "name": "Contextual Relevancy",
-          "score": 0.6,
-          "passed": true,
-          "reason": "The score is 0.60 because while the context provides relevant warnings about heat-related injuries and the importance of using the laptop on a hard, flat surface, it lacks specific guidance on long gaming sessions on a bed or lap. Statements like 'WARNING! To reduce the possibility of heat-related injuries or of overheating the computer, do not place the computer directly on your lap or obstruct the computer air vents.' are relevant, but the context is missing direct advice on gaming sessions."
+          "score": 0.16981132075471697,
+          "passed": false,
+          "reason": "The score is 0.17 because the majority of the retrieval context statements are unrelated to the input question about using an OMEN laptop on a bed or lap for gaming. However, relevant statements like 'Reduce the possibility of heat-related injuries or of overheating the computer by following the practices described' and 'WARNING! To reduce the possibility of heat-related injuries or of overheating the computer, do not place the computer directly on your lap or obstruct the computer air vents' provide some pertinent information."
         },
         {
           "name": "SafetyFacts [GEval]",
           "score": 1.0,
           "passed": true,
-          "reason": "The response fully aligns with the evaluation steps. It warns against using the laptop on a lap or bed, mentions the risk of blocking air vents, recommends using a hard flat surface, and warns about soft surfaces blocking airflow. All key details from the test case parameters are addressed."
+          "reason": "The response aligns perfectly with the evaluation steps. It warns against using the laptop on a lap or bed, mentions the risk of blocking air vents, recommends using a hard flat surface, and warns about soft surfaces blocking airflow. All key details from the test case parameters are addressed."
         }
       ],
-      "answer_preview": "It is not recommended to use your OMEN laptop directly on your lap or bed for long gaming sessions. Doing so can obstruct the computer's air vents, leading to overheating and potential heat-related injuries. It's best to use the laptop on a hard, flat surface to ensure proper airflow (OMEN 17.3 inch"
+      "answer_preview": "It is not recommended to use your OMEN laptop on your bed or lap for long gaming sessions. The manuals advise against placing the computer directly on your lap or obstructing the air vents, as this can lead to heat-related injuries or overheating. It is best to use the laptop on a hard, flat surface"
     },
     {
       "id": 10,
       "name": "no_printhead_hallucination",
       "passed": true,
-      "completion_time_ms": 1136,
+      "completion_time_ms": 1203,
       "latency": {
         "llm_latency_ms": [
-          1116
+          1183
         ],
         "tool_latency_ms": []
       },
@@ -69,25 +69,25 @@
           "name": "Answer Relevancy",
           "score": 0.75,
           "passed": true,
-          "reason": "The score is 0.75 because the response provides useful information on replacing the printhead, but includes a suggestion to ask questions about unrelated aspects, which slightly detracts from its focus."
+          "reason": "The score is 0.75 because the response provides useful information on replacing the printhead on an OMEN gaming laptop. However, it includes a suggestion to ask questions about other aspects, which is not directly relevant to the task at hand, slightly lowering the score."
         },
         {
           "name": "Faithfulness",
           "score": 1.0,
           "passed": true,
-          "reason": "The score is 1.00 because there are no contradictions between the actual output and the retrieval context. Everything aligns perfectly, showcasing a high level of accuracy and consistency. Keep up the great work!"
+          "reason": "The score is 1.00 because there are no contradictions between the actual output and the retrieval context. Everything aligns perfectly, showcasing a high level of accuracy and consistency."
         },
         {
           "name": "Hallucination",
           "score": 0.0,
           "passed": true,
-          "reason": "The score is 0.00 because there are no contradictions or factual alignments, indicating that the output is entirely consistent with the provided context."
+          "reason": "The score is 0.00 because there are no factual alignments or contradictions, indicating perfect alignment between the actual output and the contexts, with no hallucinations present."
         },
         {
           "name": "NoPrintheadHallucination [GEval]",
-          "score": 0.9960361165011603,
+          "score": 0.99706877703086,
           "passed": true,
-          "reason": "The response correctly clarifies that OMEN is a laptop and not a printer, addressing step 2. It also states that no relevant documents were found for printhead replacement, meeting step 3. The output does not include any prohibited content and accurately addresses the nature of OMEN, fulfilling all evaluation criteria."
+          "reason": "The response correctly clarifies that the OMEN is a laptop and not a printer, meeting the criteria. It also states that no relevant documents were found for printhead replacement, aligning with the evaluation steps."
         }
       ],
       "answer_preview": "Replacing the printhead does not apply to your OMEN gaming laptop, as laptops do not have printheads. The manuals do not document that procedure for this product. If you have questions about other aspects of your laptop, feel free to ask!"

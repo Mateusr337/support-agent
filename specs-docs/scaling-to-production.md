@@ -25,7 +25,7 @@ The same Locust harness supports **Mode B** (real LLM/RAG) when you need provide
 | API | Tuned: 4 workers; dev default was 1 worker + `--reload` |
 | Postgres | Pool per worker; SSE holds a DB session for the full turn |
 | Event loop | Sync DB and Qdrant calls inside async handlers |
-| Chat | Full session history sent to the LLM every turn |
+| Chat | LLM history capped to last 15 messages per turn (full session still stored in Postgres) |
 | Ingest | Offline CLI only — no admin UI or async pipeline |
 
 With current tuning, **Mode A supports 300 concurrent virtual users at 0% errors** on local Docker Compose. Real chat throughput (Mode B) remains lower and provider-bound.
@@ -39,13 +39,6 @@ With current tuning, **Mode A supports 300 concurrent virtual users at 0% errors
 - Audit logs: no per-entry `flush()`
 - Locust Mode A stress validated (300 users, 0% failures)
 - Locust methodology documented
-
-**Next (high impact)**
-
-- [ ] Reverse proxy (TLS, SSE: `proxy_buffering off`) + static frontend build
-- [ ] Size Postgres `max_connections` ≥ `UVICORN_WORKERS × (DB_POOL_SIZE + DB_MAX_OVERFLOW)` + headroom
-- [ ] Cap LLM chat history (last N messages or token window)
-- [ ] Offload sync DB/Qdrant I/O: `asyncio.to_thread(...)` in async paths
 
 **Ingestion & document management**
 
@@ -62,9 +55,6 @@ With current tuning, **Mode A supports 300 concurrent virtual users at 0% errors
 
 **Later**
 
-- [ ] Rate limiting on chat endpoints
-- [ ] Structured logs and metrics (SSE duration, pool wait, OpenAI errors)
-- [ ] Secrets via env / secret manager
 - [ ] Mode B load test with OpenAI or alternate provider (small user count, budgeted)
 
 ## Rollout order
@@ -73,7 +63,7 @@ With current tuning, **Mode A supports 300 concurrent virtual users at 0% errors
 2. Postgres `max_connections` aligned with pool × workers
 3. Async ingestion pipeline + admin upload UI
 4. Guardrails + tool/orchestration improvements (demand-driven)
-5. Cap chat history + async I/O offload
+5. ~~Cap chat history~~ (done) + async I/O offload; history summarization per [evolution.md](evolution.md)
 6. Mode B spot checks; observability and rate limits as needed
 
 ## Workers (quick reference)
