@@ -356,7 +356,7 @@ Stack: **pytest**, **pytest-cov**, **httpx** (`requirements-dev.txt` — local/C
 | API | `tests/api/` | Routes, status codes, JSON via `TestClient` |
 | Integration (later) | `tests/integration/` | Real Postgres / Qdrant when needed |
 
-Run with in-memory SQLite (`conftest.py` overrides `get_db`). Target: **≥ 90% coverage** on `app/`.
+Run with in-memory SQLite (`conftest.py` overrides `get_db`). Coverage policy: see `test-coverage.mdc` (≥ 95% on `app/`; 100% on `services/` and `repositories/`).
 
 ## Where to put new code
 

@@ -302,3 +302,51 @@ def test_list_messages_without_auth_returns_401(client):
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Not authenticated"
+
+
+def test_reload_conversation_success(client, auth_headers):
+    create_response = client.post("/api/v1/chat/conversations", headers=auth_headers)
+    assert create_response.status_code == 201
+    old_session_id = create_response.json()["id"]
+
+    response = client.post("/api/v1/chat/conversations/reload", headers=auth_headers)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["id"] != old_session_id
+    assert data["finalized_at"] is None
+
+
+def test_reload_conversation_without_active_session_returns_404(client, auth_headers):
+    response = client.post("/api/v1/chat/conversations/reload", headers=auth_headers)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Chat session not found"
+
+
+def test_reload_conversation_already_finalized_returns_400(client, auth_headers):
+    from unittest.mock import MagicMock
+
+    from app.api.v1.dependencies import get_chat_service
+    from app.main import app
+    from app.services.chat_service import ChatSessionFinalizedError
+
+    mock_service = MagicMock()
+    mock_service.reload_session.side_effect = ChatSessionFinalizedError(
+        "Chat session is already finalized"
+    )
+    app.dependency_overrides[get_chat_service] = lambda: mock_service
+
+    response = client.post("/api/v1/chat/conversations/reload", headers=auth_headers)
+
+    app.dependency_overrides.pop(get_chat_service, None)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Chat session is already finalized"
+
+
+def test_reload_conversation_without_auth_returns_401(client):
+    response = client.post("/api/v1/chat/conversations/reload")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"

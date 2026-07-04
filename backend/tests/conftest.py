@@ -114,3 +114,41 @@ def auth_headers(client, registered_user):
     assert response.status_code == 200
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+FULL_COVERAGE_PREFIXES = (
+    "app/services/",
+    "app/repositories/",
+)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if exitstatus != 0:
+        return
+    if not session.config.pluginmanager.hasplugin("_cov"):
+        return
+
+    from coverage import Coverage
+
+    backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cov = Coverage()
+    cov.load()
+
+    violations: list[str] = []
+    for filename in cov.get_data().measured_files():
+        rel_path = os.path.relpath(filename, backend_root)
+        if not rel_path.startswith("app/"):
+            continue
+        if not any(rel_path.startswith(prefix) for prefix in FULL_COVERAGE_PREFIXES):
+            continue
+        analysis = cov.analysis2(filename)
+        missing_lines = analysis[3]
+        if missing_lines:
+            violations.append(f"{rel_path}: missing lines {missing_lines}")
+
+    if violations:
+        message = "100% coverage required for services and repositories:\n" + "\n".join(
+            violations
+        )
+        session.config.pluginmanager.getplugin("terminalreporter").write_line(message)
+        session.exitstatus = 1

@@ -150,8 +150,8 @@ class ChatService:
         if session.finalized_at is not None:
             raise ChatSessionFinalizedError("Chat session is already finalized")
         session.finalized_at = datetime.now(UTC)
-        
         self._session_repository.update(session)
+        return session
 
     def reload_session(self, user_id: int) -> ChatSession:
         try:

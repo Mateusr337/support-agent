@@ -1,0 +1,59 @@
+---
+description: Backend test coverage requirements and enforcement
+globs: backend/tests/**,backend/pytest.ini,backend/.coveragerc
+alwaysApply: false
+---
+
+# Test Coverage Requirements
+
+Stack: **pytest**, **pytest-cov**, **coverage** (see `backend/requirements-dev.txt`).
+
+## Global threshold
+
+- Minimum **95%** line coverage on `app/` (enforced via `pytest.ini` / `.coveragerc` `fail_under`).
+- Omitted from measurement: `app/main.py`, `alembic/*`.
+
+## 100% required layers
+
+These modules **must** reach **100%** line coverage before merging:
+
+| Layer | Path | Rationale |
+|-------|------|-----------|
+| Services | `app/services/` | Business rules and transaction boundaries |
+| Repositories | `app/repositories/` | Data access contracts |
+
+Enforced programmatically in `tests/conftest.py` (`pytest_sessionfinish` hook).
+
+## Other layers
+
+| Layer | Target | Notes |
+|-------|--------|-------|
+| API routes | Best effort | Thin handlers; cover success and mapped error paths |
+| Agents / tools | Best effort | Mock LLM and RAG dependencies |
+| Core infra (`database.py`, `qdrant.py`) | Best effort | Often exercised via integration; not in 100% group |
+| RAG | High | Prefer full coverage on pure logic (`chunking`, `service`) |
+
+## How to run
+
+```bash
+cd backend
+pytest                                    # runs with coverage + thresholds
+pytest --cov=app --cov-report=term-missing
+```
+
+## Adding tests
+
+| Change type | Test location |
+|-------------|---------------|
+| Service business rule | `tests/unit/services/test_<service>.py` |
+| Repository query | `tests/unit/repositories/test_<repo>.py` |
+| HTTP endpoint | `tests/api/test_<feature>.py` |
+| Agent / tool | `tests/unit/agents/` or `tests/unit/tools/` |
+
+Use in-memory SQLite via `conftest.py` fixtures (`db_session`, `client`). Mock external APIs (OpenAI, Qdrant) — never call real vendors in tests.
+
+## Checklist before merge
+
+1. `pytest` passes with no coverage failures.
+2. New/changed code in `app/services/` or `app/repositories/` has tests covering all branches.
+3. Error paths and rollback paths are tested for transactional services.
