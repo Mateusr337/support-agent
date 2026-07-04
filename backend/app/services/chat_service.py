@@ -143,6 +143,27 @@ class ChatService:
             self._db.rollback()
             raise
 
+    def finalize_session(self, user_id: int) -> ChatSession | None:
+        session = self._session_repository.get_active_by_user_id(user_id)
+        if session is None:
+            raise ChatSessionNotFoundError("Chat session not found")
+        if session.finalized_at is not None:
+            raise ChatSessionFinalizedError("Chat session is already finalized")
+        session.finalized_at = datetime.now(UTC)
+        
+        self._session_repository.update(session)
+
+    def reload_session(self, user_id: int) -> ChatSession:
+        try:
+            self.finalize_session(user_id)
+            new_session = self._session_repository.create(user_id=user_id)
+            self._db.commit()
+            self._db.refresh(new_session)
+            return new_session
+        except Exception:
+            self._db.rollback()
+            raise
+
     def _to_llm_history(self, messages: list[ChatMessage]) -> list[Message]:
         return [
             Message(role=message.role, content=message.content)

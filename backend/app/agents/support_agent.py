@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from app.agents.base import AgentConfig
-from app.core.llm.base import LLMProvider, Message
+from app.core.llm.base import LLMProvider, Message, ToolCallRequest
 from app.services.audit_log_service import AuditLogService
 from app.tools.base import Tool, ToolContext
 
@@ -23,72 +23,66 @@ class SupportAgent:
         user_id: int | None = None,
         audit_log: AuditLogService | None = None,
     ) -> str:
-        if self._config.loop_mode == "tool_loop":
-            raise NotImplementedError("Agent loop mode not implemented: tool_loop")
-
-        context = await self._resolve_context(
-            user_message,
-            turn_id=turn_id,
-            session_id=session_id,
-            user_id=user_id,
-            audit_log=audit_log,
-        )
-        messages = self._build_messages(user_message, history or [], context)
-        return await self._llm.chat(
-            messages,
-            temperature=temperature,
-            audit_log=audit_log,
-            session_id=session_id,
-            user_id=user_id,
-            turn_id=turn_id,
-        )
-
-    async def _resolve_context(
-        self,
-        user_message: str,
-        *,
-        turn_id: UUID | None,
-        session_id: UUID | None,
-        user_id: int | None,
-        audit_log: AuditLogService | None,
-    ) -> str:
         tool_context = ToolContext(
             turn_id=turn_id,
             session_id=session_id,
             user_id=user_id,
             audit_log=audit_log,
         )
-        parts: list[str] = []
+        tool_definitions = [self._tools[name].definition for name in self._config.tools]
+        messages = self._build_messages(user_message, history or [])
 
-        for binding in self._config.tools:
-            if binding.invocation != "always":
+        for _ in range(self._config.max_tool_loop_iterations):
+            completion = await self._llm.chat(
+                messages,
+                temperature=temperature,
+                tools=tool_definitions or None,
+                audit_log=audit_log,
+                session_id=session_id,
+                user_id=user_id,
+                turn_id=turn_id,
+            )
+
+            if completion.tool_calls:
+                messages.append(
+                    Message(
+                        role="assistant",
+                        content=completion.content or "",
+                        tool_calls=completion.tool_calls,
+                    )
+                )
+                for tool_call in completion.tool_calls:
+                    messages.append(
+                        Message(
+                            role="tool",
+                            content=await self._run_tool_call(tool_call, tool_context),
+                            tool_call_id=tool_call.id,
+                        )
+                    )
                 continue
 
-            tool = self._tools[binding.name]
-            result = await tool.run(
-                self._build_always_arguments(binding.name, user_message),
-                context=tool_context,
-            )
-            parts.append(result.content)
+            if completion.content:
+                return completion.content
 
-        if not parts:
-            return "No relevant documents were found."
+            raise RuntimeError("LLM returned an empty response")
 
-        return "\n\n".join(parts)
+        raise RuntimeError("Maximum tool loop iterations exceeded")
 
-    def _build_always_arguments(self, tool_name: str, user_message: str) -> dict:
-        if tool_name == "search_documents":
-            return {"query": user_message}
-        raise NotImplementedError(f"Always invocation not defined for tool: {tool_name}")
-
-    def _build_messages(
+    async def _run_tool_call(
         self,
-        user_message: str,
-        history: list[Message],
-        context: str,
-    ) -> list[Message]:
+        tool_call: ToolCallRequest,
+        tool_context: ToolContext,
+    ) -> str:
+        tool = self._tools.get(tool_call.name)
+        if tool is None:
+            return f"Unknown tool: {tool_call.name}"
+
+        result = await tool.run(tool_call.arguments, context=tool_context)
+        return result.content
+
+    def _build_messages(self, user_message: str, history: list[Message]) -> list[Message]:
         return [
-            Message(role="system", content=self._config.prompt.format(context=context)),
+            Message(role="system", content=self._config.prompt),
             *history,
             Message(role="user", content=user_message),
         ]

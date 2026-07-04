@@ -45,3 +45,7 @@ class ChatSessionRepository:
         self._db.add(session)
         self._db.flush()
         return session
+
+    def update(self, session: ChatSession) -> ChatSession:
+        self._db.flush()
+        return session

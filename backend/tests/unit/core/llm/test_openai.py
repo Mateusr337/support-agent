@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.core.llm.base import Message
+from app.core.llm.base import ChatCompletion, Message
 from app.core.llm.factory import get_llm_provider
 from app.core.llm.openai import OpenAILLMProvider
 
@@ -74,7 +74,7 @@ def test_chat_returns_assistant_content_using_mock_client():
         )
     )
 
-    assert result == "Reset the printer."
+    assert result == ChatCompletion(content="Reset the printer.")
     mock_client.chat.completions.create.assert_awaited_once_with(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": "How do I reset my printer?"}],
@@ -108,7 +108,7 @@ def test_chat_logs_audit_entries_when_context_is_provided():
         )
     )
 
-    assert result == "Done"
+    assert result == ChatCompletion(content="Done")
     assert audit_log.info.call_count == 3
 
 

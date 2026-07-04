@@ -1,4 +1,4 @@
-from app.agents.base import AgentConfig, ToolBinding
+from app.agents.base import AgentConfig
 from app.agents.prompts import SYSTEM_PROMPT
 from app.agents.support_agent import SupportAgent
 from app.core.llm.base import LLMProvider
@@ -14,8 +14,7 @@ AGENTS: dict[str, AgentConfig] = {
     "support": AgentConfig(
         name="support",
         prompt=SYSTEM_PROMPT,
-        tools=(ToolBinding("search_documents", "always"),),
-        loop_mode="single_shot",
+        tools=("search_documents",),
     ),
 }
 

@@ -11,7 +11,7 @@ The application has the following requirements:
 - [x] Frontend with Graphical Interface, of your own choosing, to provide user interaction.
 - [x] Backend must run with Python code using FastAPI.
 - [x] Backend must have unit tests with at least 90% of coverage.
-- [ ] You can use either cloud or local (open source) models, of your own choosing. *(OpenAI wired for chat and embeddings; local models not yet supported)*
+- [x] You can use either cloud or local (open source) models, of your own choosing. *(OpenAI wired for chat and embeddings; local models not yet supported)*
 - [x] Must use an open-source Vector Database for performing RAG. *(Qdrant + `RagService` ingest and search)*
 - [x] Must use only the attached documents for building the Vector Database. *(Ingest reads PDFs from `documents/` only)*
 - [x] Must use a Chunking Strategy to index the document on the Vector Database. *(Fixed-size chunks with overlap via `rag/chunking.py`)*
@@ -189,6 +189,7 @@ All endpoints require a valid JWT (`Authorization: Bearer <token>`) except regis
 | ------ | ------------------------------------------------- | -------------------------------------------------------- |
 | `POST` | `/api/v1/chat/conversations`                      | Create a new chat session (`201`)                        |
 | `GET`  | `/api/v1/chat/conversations/active`               | Get or create the user's active session (`200`)          |
+| `POST` | `/api/v1/chat/conversations/reload`               | Finalize the active session and create a new one (`201`) |
 | `GET`  | `/api/v1/chat/conversations/{session_id}/messages` | List messages, cursor-paginated (`limit`, `offset`; default `10`) |
 | `POST` | `/api/v1/chat/conversations/{session_id}/messages` | Send a message (`201`; RAG + LLM assistant reply with chat history) |
 

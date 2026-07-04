@@ -32,13 +32,24 @@ class SearchDocumentsTool:
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="search_documents",
-            description="Search HP product manuals for relevant passages.",
+            description=(
+                "Retrieve relevant passages from indexed HP product manuals. "
+                "Use when the user asks about HP products, even in casual or vague wording "
+                "(specs, setup, troubleshooting, safety, parts, or warranty). "
+                "Skip for greetings or non-product chat."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string"},
-                    "top_k": {"type": "integer"},
-                    "score_threshold": {"type": "number"},
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Search query based on the user's question. "
+                            "Include product name or model when the user mentions it; "
+                            "otherwise use their everyday wording and topic. "
+                            "Add technical terms only when the user already used them."
+                        ),
+                    },
                 },
                 "required": ["query"],
             },

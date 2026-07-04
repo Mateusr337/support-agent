@@ -42,6 +42,36 @@ def create_conversation(
     return ChatSessionResponse.model_validate(session)
 
 
+@router.post(
+    "/reload",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ChatSessionResponse,
+    responses=merge_responses(
+        UNAUTHORIZED_RESPONSE, 
+        NOT_FOUND_RESPONSE, 
+        BAD_REQUEST_RESPONSE,
+        VALIDATION_ERROR_RESPONSE,
+    ),
+)
+def reload_conversation(
+    current_user: User = Depends(get_current_user),
+    service: ChatService = Depends(get_chat_service),
+) -> ChatSessionResponse:
+    try:
+        session = service.reload_session(user_id=current_user.id)
+    except ChatSessionNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except ChatSessionFinalizedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return ChatSessionResponse.model_validate(session)
+
+
 @router.get(
     "/active",
     status_code=status.HTTP_200_OK,

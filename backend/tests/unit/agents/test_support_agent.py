@@ -3,10 +3,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from app.agents.prompts import SYSTEM_PROMPT
-from app.agents.base import AgentConfig
 from app.agents.registry import AGENTS, UnknownAgentError, build_agent
 from app.agents.support_agent import SupportAgent
-from app.core.llm.base import Message
+from app.core.llm.base import ChatCompletion, Message, ToolCallRequest
 from app.tools.base import RetrievedChunk, ToolContext
 from app.tools.registry import ToolDeps, build_tool_set
 from app.tools.search_documents import DEFAULT_SCORE_THRESHOLD, DEFAULT_TOP_K, SearchDocumentsTool
@@ -35,9 +34,26 @@ def _build_test_agent(
     return SupportAgent(llm=llm, config=config, tools=tools), searcher
 
 
-def test_reply_calls_llm_with_context_and_history():
+def test_reply_runs_tool_loop_and_returns_final_answer():
+    captured_messages: list[list[Message]] = []
+
+    async def fake_chat(messages, **kwargs):
+        captured_messages.append(list(messages))
+        if len(captured_messages) == 1:
+            return ChatCompletion(
+                content=None,
+                tool_calls=(
+                    ToolCallRequest(
+                        id="call_1",
+                        name="search_documents",
+                        arguments={"query": "How do I reset my printer?"},
+                    ),
+                ),
+            )
+        return ChatCompletion(content="Reset the printer.")
+
     llm = MagicMock()
-    llm.chat = AsyncMock(return_value="Reset the printer.")
+    llm.chat = AsyncMock(side_effect=fake_chat)
     searcher = FakeSearcher(
         chunks=[
             RetrievedChunk(
@@ -61,31 +77,42 @@ def test_reply_calls_llm_with_context_and_history():
     assert result == "Reset the printer."
     assert searcher.last_query == "How do I reset my printer?"
     assert searcher.last_top_k == DEFAULT_TOP_K
-    llm.chat.assert_awaited_once()
-    call_kwargs = llm.chat.await_args.kwargs
-    assert call_kwargs["temperature"] == 0.1
-    messages = llm.chat.await_args.args[0]
-    assert messages[0].role == "system"
-    assert "manual.pdf" in messages[0].content
-    assert "page 4" in messages[0].content
-    assert messages[1:-1] == history
-    assert messages[-1].content == "How do I reset my printer?"
+    assert llm.chat.await_count == 2
+
+    first_call = llm.chat.await_args_list[0]
+    assert first_call.kwargs["temperature"] == 0.1
+    assert len(first_call.kwargs["tools"]) == 1
+    assert first_call.kwargs["tools"][0].name == "search_documents"
+
+    first_messages = captured_messages[0]
+    assert first_messages[0].role == "system"
+    assert first_messages[0].content == SYSTEM_PROMPT
+    assert first_messages[1:3] == history
+    assert first_messages[-1].content == "How do I reset my printer?"
+
+    second_messages = captured_messages[1]
+    assert second_messages[-2].role == "assistant"
+    assert second_messages[-2].tool_calls[0].name == "search_documents"
+    assert second_messages[-1].role == "tool"
+    assert "manual.pdf" in second_messages[-1].content
+    assert "page 4" in second_messages[-1].content
 
 
-def test_reply_uses_empty_context_when_search_returns_no_chunks():
+def test_reply_returns_direct_answer_when_llm_skips_tools():
     llm = MagicMock()
-    llm.chat = AsyncMock(return_value="I can help with that.")
-    agent, _ = _build_test_agent(llm, FakeSearcher())
+    llm.chat = AsyncMock(return_value=ChatCompletion(content="Hello! How can I help?"))
+    agent, searcher = _build_test_agent(llm, FakeSearcher())
 
-    asyncio.run(agent.reply("Help me"))
+    result = asyncio.run(agent.reply("Hi"))
 
-    messages = llm.chat.await_args.args[0]
-    assert "No relevant documents were found." in messages[0].content
+    assert result == "Hello! How can I help?"
+    assert searcher.last_query is None
+    llm.chat.assert_awaited_once()
 
 
 def test_reply_passes_audit_context_to_llm():
     llm = MagicMock()
-    llm.chat = AsyncMock(return_value="Done")
+    llm.chat = AsyncMock(return_value=ChatCompletion(content="Done"))
     audit_log = MagicMock()
     session_id = uuid4()
     turn_id = uuid4()
@@ -104,6 +131,7 @@ def test_reply_passes_audit_context_to_llm():
     llm.chat.assert_awaited_once_with(
         llm.chat.await_args.args[0],
         temperature=0.2,
+        tools=llm.chat.await_args.kwargs["tools"],
         audit_log=audit_log,
         session_id=session_id,
         user_id=7,
@@ -197,5 +225,4 @@ def test_support_agent_config_uses_system_prompt():
 
     assert config.prompt == SYSTEM_PROMPT
     assert config.tool_names == ("search_documents",)
-    assert config.tools[0].invocation == "always"
-    assert config.loop_mode == "single_shot"
+    assert config.max_tool_loop_iterations == 2
