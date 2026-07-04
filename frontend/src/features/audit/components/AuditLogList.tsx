@@ -7,6 +7,14 @@ import Input from '../../../components/ui/Input';
 import Spinner from '../../../components/ui/Spinner';
 import './AuditLogList.css';
 
+function auditTypeClass(type: string): string {
+  return `type-${type.toLowerCase().replace(/\s+/g, '-')}`;
+}
+
+function formatLogDataForDisplay(data: unknown): string {
+  return JSON.stringify(data, null, 2).replace(/\\n/g, '\n');
+}
+
 export default function AuditLogList() {
   const { logs, loading, loadingMore, hasMore, error, fetchLogs, loadMore } = useAuditLogs();
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -136,7 +144,7 @@ export default function AuditLogList() {
                   <Fragment key={log.id}>
                     <tr className={expandedId === log.id ? 'expanded-row' : ''}>
                       <td>{log.id}</td>
-                      <td><span className={`badge type-${log.type}`}>{log.type}</span></td>
+                      <td><span className={`badge ${auditTypeClass(log.type)}`}>{log.type}</span></td>
                       <td><span className={`badge status-${log.status}`}>{log.status}</span></td>
                       <td>{log.message}</td>
                       <td>{log.user_id}</td>
@@ -161,7 +169,7 @@ export default function AuditLogList() {
                             </div>
                             {log.data ? (
                               <pre className="audit-log-json">
-                                {JSON.stringify(log.data, null, 2)}
+                                {formatLogDataForDisplay(log.data)}
                               </pre>
                             ) : (
                               <p className="audit-log-no-data">No additional data</p>

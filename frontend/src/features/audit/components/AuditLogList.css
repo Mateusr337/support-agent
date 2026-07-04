@@ -59,6 +59,8 @@
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--color-border);
   font-size: 0.875rem;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .audit-log-table th {
@@ -120,24 +122,18 @@
   color: var(--color-danger);
 }
 
-.type-agent_request,
-.type-agent_response {
+.type-agent {
   background: rgba(99, 102, 241, 0.2);
   color: #a5b4fc;
 }
 
-.type-tool_call,
-.type-tool_response {
-  background: rgba(168, 85, 247, 0.2);
-  color: #d8b4fe;
-}
-
-.type-rag_call {
+.type-tool-call,
+.type-tool-result {
   background: rgba(34, 197, 94, 0.2);
   color: #86efac;
 }
 
-.type-token_usage {
+.type-token-usage {
   background: var(--color-primary-muted);
   color: var(--color-primary);
 }
@@ -162,6 +158,8 @@
 
 .audit-log-metadata p {
   margin: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .audit-log-json {
@@ -170,9 +168,11 @@
   padding: 1rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  overflow-x: auto;
   font-size: 0.875rem;
   margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .audit-log-no-data {
