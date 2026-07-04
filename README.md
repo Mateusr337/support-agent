@@ -199,6 +199,14 @@ All endpoints require a valid JWT (`Authorization: Bearer <token>`) except regis
 | ------ | -------------------- | ----------------------------------------------------------------------------------------------------- |
 | `GET`  | `/api/v1/audit/logs` | List audit logs, cursor-paginated (`limit`, `offset`; default `25`; filters: `session_id`, `turn_id`) |
 
+### Stats
+
+| Method | Endpoint               | Description                                                                                    |
+| ------ | ---------------------- | ---------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/stats/metrics` | Aggregated usage/latency metrics for the logged-in user (`period=today\|week`; optional filters) |
+
+See [`specs-docs/stats-dashboard.md`](specs-docs/stats-dashboard.md) for metric definitions and audit-log mapping.
+
 Assistant replies use the support agent with document search (`search_documents`) and OpenAI chat completion. Pipeline steps are recorded in audit logs.
 
 #### Send message (SSE)
@@ -235,6 +243,7 @@ Interactive docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 | `/login`    | LoginPage     | guest only    |
 | `/register` | RegisterPage  | guest only    |
 | `/chat`     | ChatPage      | authenticated |
+| `/stats`    | StatsPage     | authenticated |
 | `/audit`    | AuditLogsPage | authenticated |
 
 The chat UI loads the latest messages first and fetches older messages when scrolling to the top. The audit logs page uses the same cursor-pagination pattern (default 25 logs per page, infinite scroll).

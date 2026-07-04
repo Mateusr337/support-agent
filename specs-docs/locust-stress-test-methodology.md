@@ -77,6 +77,7 @@ locust -f load/locustfile.py --host http://localhost:8000 --headless -u 300 -r 3
 | Endpoint (300 users)        | Median  | p95     | Notes                  |
 | --------------------------- | ------- | ------- | ---------------------- |
 | `GET /audit/logs`           | ~3 ms   | ~8 ms   | Main task traffic      |
+| `GET /stats/metrics`        | ~5 ms   | ~15 ms  | Aggregated audit query |
 | `POST /auth/login [repeat]` | ~190 ms | ~220 ms | Stable                 |
 | `POST /users [register]`    | ~340 ms | ~730 ms | Once per user at start |
 

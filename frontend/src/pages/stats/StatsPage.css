@@ -1,0 +1,16 @@
+.stats-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.stats-page-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.stats-page-empty {
+  padding: 2rem;
+  color: var(--color-text-muted);
+}

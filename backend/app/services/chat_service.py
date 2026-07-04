@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import time
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
@@ -99,6 +100,8 @@ class ChatService:
 
         yield {"type": "turn_started", "turn_id": str(turn_id)}
 
+        turn_start = time.perf_counter()
+
         try:
             session.updated_at = datetime.now(UTC)
 
@@ -137,13 +140,14 @@ class ChatService:
                 yield event
 
             reply = "".join(reply_parts)
+            turn_latency_ms = round((time.perf_counter() - turn_start) * 1000)
             self._audit_log.info(
                 session_id=session_id,
                 user_id=user_id,
                 turn_id=turn_id,
                 type="Agent",
                 message="Agent reply generated",
-                data={"reply_content": reply},
+                data={"reply_content": reply, "latency_ms": turn_latency_ms},
             )
             assistant_message = self._message_repository.create(
                 chat_session_id=session_id,

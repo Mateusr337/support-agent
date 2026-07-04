@@ -376,6 +376,7 @@ Run with in-memory SQLite (`conftest.py` overrides `get_db`). Coverage policy: s
 | What | Where |
 |------|-------|
 | New HTTP feature | `api/v1/<feature>/routes.py` + register in `router.py` |
+| Usage / latency metrics | `services/stats_service.py` + `api/v1/stats/` |
 | Feature DTOs | `api/v1/<feature>/schemas.py` |
 | DB table | `models/<entity>.py` + Alembic migration |
 | Postgres query/persistence | `repositories/<entity>_repository.py` |

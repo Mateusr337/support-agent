@@ -80,7 +80,7 @@ def test_reply_runs_tool_loop_and_returns_final_answer():
     assert result == "Reset the printer."
     assert searcher.last_query == "How do I reset my printer?"
     assert searcher.last_top_k == DEFAULT_TOP_K
-    assert stream_calls == 2
+    assert stream_calls == 3
 
     first_messages = captured_messages[0]
     assert first_messages[0].role == "system"
@@ -123,10 +123,11 @@ def test_reply_stream_emits_tool_call_and_tokens():
 
     assert events == [
         {"type": "tool_call", "name": "search_documents"},
+        {"type": "tool_call", "name": "search_documents"},
         {"type": "token", "content": "The "},
         {"type": "token", "content": "battery."},
     ]
-    assert stream_calls == 2
+    assert stream_calls == 3
 
 
 def test_reply_stream_emits_tokens_for_direct_answer():

@@ -127,6 +127,14 @@ export default function AppHeader({ onReloadClick, reloadDisabled = false }: App
                 </button>
               )}
               <NavLink
+                to="/stats"
+                className="app-header-menu-item"
+                role="menuitem"
+                onClick={closeMenu}
+              >
+                Stats
+              </NavLink>
+              <NavLink
                 to="/audit"
                 className="app-header-menu-item"
                 role="menuitem"

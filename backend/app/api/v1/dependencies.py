@@ -11,6 +11,7 @@ from app.core.llm.factory import get_llm_provider
 from app.services.audit_log_service import AuditLogService
 from app.services.chat_service import ChatService
 from app.services.health_service import HealthService
+from app.services.stats_service import StatsService
 from app.services.user_service import UserService
 
 
@@ -20,6 +21,10 @@ def get_user_service(db: Session = Depends(get_db)) -> UserService:
 
 def get_audit_log_service(db: Session = Depends(get_db)) -> AuditLogService:
     return AuditLogService(db)
+
+
+def get_stats_service(db: Session = Depends(get_db)) -> StatsService:
+    return StatsService(db)
 
 
 @lru_cache

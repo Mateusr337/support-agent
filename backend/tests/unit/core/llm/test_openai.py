@@ -164,7 +164,7 @@ def test_chat_stream_passes_tools_when_provided():
     )
 
     provider = _provider_with_mock_client(mock_client)
-    tokens = asyncio.run(_collect_stream(provider, tools=[tool]))
+    tokens, _ = asyncio.run(_collect_stream(provider, tools=[tool]))
 
     assert tokens == ["Done"]
     mock_client.chat.completions.create.assert_awaited_once_with(
@@ -187,6 +187,14 @@ def test_chat_stream_passes_tools_when_provided():
 
 
 def test_chat_stream_yields_tool_calls_from_stream_deltas():
+    function_one = MagicMock()
+    function_one.name = "search_documents"
+    function_one.arguments = '{"query":'
+
+    function_two = MagicMock()
+    function_two.name = None
+    function_two.arguments = ' "reset"}'
+
     async def fake_stream():
         chunk_one = MagicMock()
         chunk_one.choices = [
@@ -197,7 +205,7 @@ def test_chat_stream_yields_tool_calls_from_stream_deltas():
                         MagicMock(
                             index=0,
                             id="call_1",
-                            function=MagicMock(name="search_documents", arguments='{"query":'),
+                            function=function_one,
                         )
                     ],
                 )
@@ -213,7 +221,7 @@ def test_chat_stream_yields_tool_calls_from_stream_deltas():
                         MagicMock(
                             index=0,
                             id=None,
-                            function=MagicMock(name=None, arguments=' "reset"}'),
+                            function=function_two,
                         )
                     ],
                 )

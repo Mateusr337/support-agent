@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -60,3 +63,27 @@ class AuditLogRepository:
         rows = list(self._db.execute(stmt).scalars().all())
         has_more = len(rows) > limit
         return rows[:limit], has_more
+
+    def list_for_metrics(
+        self,
+        *,
+        user_id: int,
+        from_dt: datetime,
+        to_dt: datetime,
+        session_id: UUID | None = None,
+        turn_id: UUID | None = None,
+    ) -> list[AuditLog]:
+        stmt = (
+            select(AuditLog)
+            .where(
+                AuditLog.user_id == user_id,
+                AuditLog.created_at >= from_dt,
+                AuditLog.created_at <= to_dt,
+            )
+            .order_by(AuditLog.created_at.asc())
+        )
+        if session_id is not None:
+            stmt = stmt.where(AuditLog.session_id == session_id)
+        if turn_id is not None:
+            stmt = stmt.where(AuditLog.turn_id == turn_id)
+        return list(self._db.execute(stmt).scalars().all())

@@ -108,3 +108,33 @@ def test_list_paginates_with_offset(db_session):
     assert len(second_page) == 2
     assert has_more_again is False
     assert second_page[-1].message == "Log 0"
+
+
+def test_list_for_metrics_filters_by_date_range(db_session):
+    from datetime import UTC, datetime, timedelta
+
+    user = _create_user(db_session)
+    session = ChatSession(user_id=user.id)
+    db_session.add(session)
+    db_session.commit()
+
+    turn_id = uuid4()
+    now = datetime.now(UTC)
+    repository = AuditLogRepository(db_session)
+    repository.create(
+        session_id=session.id,
+        user_id=user.id,
+        turn_id=turn_id,
+        type="Token Usage",
+        status="info",
+        message="LLM token usage",
+        data={"total_tokens": 5, "prompt_tokens": 3, "completion_tokens": 2},
+    )
+    db_session.commit()
+
+    rows = repository.list_for_metrics(
+        user_id=user.id,
+        from_dt=now - timedelta(hours=1),
+        to_dt=now + timedelta(hours=1),
+    )
+    assert len(rows) == 1

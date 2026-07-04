@@ -279,6 +279,30 @@ else:
                 if page_response.status_code != 200:
                     page_response.failure(f"HTTP {page_response.status_code}")
 
+        @task(2)
+        def get_stats_metrics_today(self) -> None:
+            with self.client.get(
+                f"{API_PREFIX}/stats/metrics",
+                headers=_auth_headers(self.token),
+                params={"period": "today"},
+                name=f"{API_PREFIX}/stats/metrics [today]",
+                catch_response=True,
+            ) as response:
+                if response.status_code != 200:
+                    response.failure(f"HTTP {response.status_code}")
+
+        @task(1)
+        def get_stats_metrics_week(self) -> None:
+            with self.client.get(
+                f"{API_PREFIX}/stats/metrics",
+                headers=_auth_headers(self.token),
+                params={"period": "week"},
+                name=f"{API_PREFIX}/stats/metrics [week]",
+                catch_response=True,
+            ) as response:
+                if response.status_code != 200:
+                    response.failure(f"HTTP {response.status_code}")
+
         @task(1)
         def login_again(self) -> None:
             with self.client.post(
