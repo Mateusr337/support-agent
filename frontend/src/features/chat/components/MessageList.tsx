@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChatMessage, StreamingState } from "../../../types/chat";
+import MarkdownContent from "../../../components/ui/MarkdownContent";
 import Spinner from "../../../components/ui/Spinner";
 import "./MessageList.css";
 
@@ -18,7 +19,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
         </div>
       )}
       <div className={`message-bubble ${isUser ? "message-bubble-user" : "message-bubble-bot"}`}>
-        <p>{message.content}</p>
+        {isUser ? <p>{message.content}</p> : <MarkdownContent content={message.content} />}
       </div>
     </div>
   );
@@ -50,7 +51,7 @@ function StreamingBubble({ streaming }: StreamingBubbleProps) {
           </p>
         )}
         {streaming.content.length > 0 ? (
-          <p>{streaming.content}</p>
+          <MarkdownContent content={streaming.content} />
         ) : (
           !showStatus && (
             <div className="message-typing" aria-label="Assistant is typing">
