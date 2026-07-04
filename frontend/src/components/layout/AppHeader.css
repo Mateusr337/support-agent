@@ -137,6 +137,15 @@
   color: var(--color-text);
 }
 
+.app-header-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.app-header-menu-item:disabled:hover {
+  background: transparent;
+}
+
 .app-header-menu-item-danger {
   color: var(--color-danger);
 }

@@ -14,7 +14,7 @@ const SIZES = {
   lg: "btn-lg",
 } as const;
 
-type ButtonVariant = keyof typeof VARIANTS;
+export type ButtonVariant = keyof typeof VARIANTS;
 type ButtonSize = keyof typeof SIZES;
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -63,5 +63,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
     </button>
   );
 });
+
+Button.displayName = "Button";
 
 export default Button;

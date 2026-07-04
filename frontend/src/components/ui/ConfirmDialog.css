@@ -70,7 +70,7 @@
     flex-direction: column-reverse;
   }
 
-  .confirm-dialog-actions .btn {
+  .confirm-dialog-action {
     width: 100%;
   }
 }

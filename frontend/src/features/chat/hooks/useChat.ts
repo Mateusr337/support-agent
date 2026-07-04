@@ -18,6 +18,7 @@ export function useChat(): UseChatReturn {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
+  const [reloadingSession, setReloadingSession] = useState(false);
   const [error, setError] = useState("");
   const loadingOlderRef = useRef(false);
 
@@ -143,12 +144,12 @@ export function useChat(): UseChatReturn {
     [sessionId, sending]
   );
 
-  const reloadSession = useCallback(async () => {
-    if (sending) {
-      return;
+  const reloadSession = useCallback(async (): Promise<boolean> => {
+    if (sending || reloadingSession) {
+      return false;
     }
 
-    setSending(true);
+    setReloadingSession(true);
     setError("");
 
     try {
@@ -156,16 +157,18 @@ export function useChat(): UseChatReturn {
       setSessionId(session.id);
       setMessages([WELCOME_MESSAGE]);
       setHasMoreOlder(false);
+      return true;
     } catch (err) {
       setError(
         err instanceof ApiError
           ? err.message
           : "Unable to start a new chat session. Please try again."
       );
+      return false;
     } finally {
-      setSending(false);
+      setReloadingSession(false);
     }
-  }, [sending]);
+  }, [sending, reloadingSession]);
 
   return {
     messages,
@@ -173,6 +176,7 @@ export function useChat(): UseChatReturn {
     loadingOlder,
     hasMoreOlder,
     sending,
+    reloadingSession,
     error,
     sendMessage,
     loadOlderMessages,

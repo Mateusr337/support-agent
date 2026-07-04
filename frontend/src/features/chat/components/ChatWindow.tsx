@@ -1,4 +1,6 @@
+import { useState } from "react";
 import Spinner from "../../../components/ui/Spinner";
+import ConfirmDialog from "../../../components/ui/ConfirmDialog";
 import AppHeader from "../../../components/layout/AppHeader";
 import MessageInput from "./MessageInput";
 import MessageList from "./MessageList";
@@ -12,12 +14,27 @@ export default function ChatWindow() {
     loadingOlder,
     hasMoreOlder,
     sending,
+    reloadingSession,
     error,
     sendMessage,
     loadOlderMessages,
     reloadSession,
     canSend,
   } = useChat();
+  const [reloadConfirmOpen, setReloadConfirmOpen] = useState(false);
+
+  async function handleReloadConfirm() {
+    const success = await reloadSession();
+    if (success) {
+      setReloadConfirmOpen(false);
+    }
+  }
+
+  function closeReloadConfirm() {
+    if (!reloadingSession) {
+      setReloadConfirmOpen(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -30,7 +47,21 @@ export default function ChatWindow() {
 
   return (
     <div className="chat-window">
-      <AppHeader onReload={reloadSession} />
+      <AppHeader
+        onReloadClick={() => setReloadConfirmOpen(true)}
+        reloadDisabled={sending || reloadingSession}
+      />
+      <ConfirmDialog
+        open={reloadConfirmOpen}
+        title="Start a new chat?"
+        description="This will clear your current conversation and begin a fresh session. This action cannot be undone."
+        confirmLabel="Start new chat"
+        cancelLabel="Keep chatting"
+        confirmVariant="danger"
+        loading={reloadingSession}
+        onConfirm={handleReloadConfirm}
+        onCancel={closeReloadConfirm}
+      />
       {error && (
         <div className="chat-error" role="alert">
           {error}

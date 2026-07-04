@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import Button from "./Button";
+import Button, { type ButtonVariant } from "./Button";
 import "./ConfirmDialog.css";
 
 interface ConfirmDialogProps {
@@ -9,11 +9,14 @@ interface ConfirmDialogProps {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  confirmVariant?: "primary" | "danger";
+  confirmVariant?: ButtonVariant;
   loading?: boolean;
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }
+
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export default function ConfirmDialog({
   open,
@@ -28,20 +31,57 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   const titleId = useId();
   const descriptionId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const [pending, setPending] = useState(false);
+  const isBusy = loading || pending;
+
+  const getFocusableElements = useCallback(() => {
+    if (!dialogRef.current) {
+      return [];
+    }
+
+    return Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+    );
+  }, []);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
     cancelRef.current?.focus();
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !loading) {
+      if (event.key === "Escape" && !isBusy) {
         onCancel();
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const focusable = getFocusableElements();
+      if (focusable.length === 0) {
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     }
 
@@ -49,8 +89,27 @@ export default function ConfirmDialog({
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
+      previousFocusRef.current?.focus();
     };
-  }, [open, loading, onCancel]);
+  }, [open, isBusy, onCancel, getFocusableElements]);
+
+  async function handleConfirmClick() {
+    if (isBusy) {
+      return;
+    }
+
+    const result = onConfirm();
+    if (!(result instanceof Promise)) {
+      return;
+    }
+
+    setPending(true);
+    try {
+      await result;
+    } finally {
+      setPending(false);
+    }
+  }
 
   if (!open) {
     return null;
@@ -62,10 +121,11 @@ export default function ConfirmDialog({
         type="button"
         className="confirm-dialog-backdrop"
         aria-label="Close dialog"
-        disabled={loading}
+        disabled={isBusy}
         onClick={onCancel}
       />
       <div
+        ref={dialogRef}
         className="confirm-dialog"
         role="alertdialog"
         aria-modal="true"
@@ -83,7 +143,8 @@ export default function ConfirmDialog({
             ref={cancelRef}
             variant="secondary"
             size="sm"
-            disabled={loading}
+            className="confirm-dialog-action"
+            disabled={isBusy}
             onClick={onCancel}
           >
             {cancelLabel}
@@ -91,8 +152,9 @@ export default function ConfirmDialog({
           <Button
             variant={confirmVariant}
             size="sm"
-            loading={loading}
-            onClick={onConfirm}
+            className="confirm-dialog-action"
+            loading={isBusy}
+            onClick={handleConfirmClick}
           >
             {confirmLabel}
           </Button>
