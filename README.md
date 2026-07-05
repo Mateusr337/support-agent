@@ -400,11 +400,30 @@ Tests full chat SSE turns with latency metrics (`turn_complete`, `time_to_first_
 
    Not run in this project (OpenAI cost). Use for provider SLA checks with low user count when needed.
 
-### Troubleshooting
+### Results and conclusions
 
-| Symptom | Cause | Fix |
-| ------- | ----- | --- |
-| 100% failures on `users [register]`, 0 bytes response | API not running | `docker compose up -d` — Locust aborts early if `/health` is unreachable |
-| 100% failures on register, HTTP 422 | Invalid email domain | Use `@example.com` (not `@loadtest.local`) — already fixed in `locustfile.py` |
-| `Connection refused` mid-test | Backend crashed under load | Check `docker compose logs backend`; reduce users/spawn rate; restart backend |
-| Seed SSE fails in Mode A | `LOAD_TEST` not enabled | Set `LOAD_TEST=true` in `.env` and `docker compose up -d --build backend` |
+Mode A (`LOAD_TEST=true`, fake agent) isolates API/DB/SSE limits without OpenAI cost. After tuning, the stack sustained **300 concurrent virtual users** for 5 minutes with **0% failures**.
+
+| Metric | Before fixes | After fixes |
+| ------ | ------------ | ----------- |
+| Config | 1 worker, default pool (~15 connections) | 4 workers, `DB_POOL_SIZE=10`, `DB_MAX_OVERFLOW=20` |
+| Failures at 300 users | **~37%** (`QueuePool limit` in logs) | **0%** |
+| Throughput | DB pool exhausted | **~147 req/s** (~8.8k req/min), 26k+ requests |
+
+**Latency at 300 users (after fixes):**
+
+| Endpoint | Median | p95 |
+| -------- | ------ | --- |
+| `GET /audit/logs` | ~3 ms | ~8 ms |
+| `GET /stats/metrics` | ~5 ms | ~15 ms |
+| `POST /auth/login [repeat]` | ~190 ms | ~220 ms |
+| `POST /users [register]` | ~340 ms | ~730 ms |
+
+**Conclusions**
+
+- The main bottleneck under stress was **Postgres connection pooling**, not CPU or Locust itself — fixed by worker count + pool sizing + audit batching (no per-entry flush).
+- Mode A validates **platform** scalability (auth, SSE, audit, stats). Mode B (real OpenAI + RAG) was not stress-tested to avoid API cost; throughput there is **provider-bound**.
+- Capacity planning: `peak_db_connections ≈ UVICORN_WORKERS × (DB_POOL_SIZE + DB_MAX_OVERFLOW)` — e.g. 4 × 30 = **120** checkouts with current tuning.
+- Pass gate for future runs: **< 1% failures** at target user count; re-run with `./load/run_locust.sh --headless -u 300 -r 30 -t 5m` after infra changes.
+
+Full methodology and troubleshooting: [specs-docs/locust-stress-test-methodology.md](specs-docs/locust-stress-test-methodology.md).
