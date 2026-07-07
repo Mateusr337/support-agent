@@ -33,6 +33,54 @@ _case1_metrics: list[BaseMetric] = [
     ),
 ]
 
+_case2_metrics: list[BaseMetric] = [
+    ContextualRelevancyMetric(threshold=0.6, model=_judge),
+    GEval(
+        name="SsdSelfRepairFacts",
+        criteria=(
+            "The answer must explain that some parts are Customer Self-Repair "
+            "while others require authorized service, that SSD replacement is "
+            "documented under Customer Self-Repair, warn that wrong parts can "
+            "damage the computer or void warranty, and mention high-level steps "
+            "such as removing the bottom cover and disconnecting the battery."
+        ),
+        evaluation_params=[LLMTestCaseParams.ACTUAL_OUTPUT],
+        threshold=0.7,
+        model=_judge,
+    ),
+]
+
+_case4_metrics: list[BaseMetric] = [
+    ContextualRelevancyMetric(threshold=0.6, model=_judge),
+    GEval(
+        name="MemoryUpgradeFacts",
+        criteria=(
+            "The answer must mention two SODIMM slots and dual-channel support, "
+            "DDR5-5600 memory at 1.1 V, supported configs of 16 GB and 32 GB, "
+            "and that memory is customer accessible or upgradeable."
+        ),
+        evaluation_params=[LLMTestCaseParams.ACTUAL_OUTPUT],
+        threshold=0.7,
+        model=_judge,
+    ),
+]
+
+_case6_metrics: list[BaseMetric] = [
+    ContextualRelevancyMetric(threshold=0.6, model=_judge),
+    GEval(
+        name="WifiResetFacts",
+        criteria=(
+            "The answer must describe holding the Wi-Fi button on the back for "
+            "at least 3 seconds, restoring network settings to default, putting "
+            "the printer in Auto Wireless Connect (AWC) setup mode, and using "
+            "the HP Smart app to complete setup."
+        ),
+        evaluation_params=[LLMTestCaseParams.ACTUAL_OUTPUT],
+        threshold=0.7,
+        model=_judge,
+    ),
+]
+
 _case10_metrics: list[BaseMetric] = [
     HallucinationMetric(threshold=0.7, model=_judge),
     GEval(
@@ -50,6 +98,9 @@ _case10_metrics: list[BaseMetric] = [
 
 _METRICS_BY_CASE: dict[int, list[BaseMetric]] = {
     1: _shared_metrics + _case1_metrics,
+    2: _shared_metrics + _case2_metrics,
+    4: _shared_metrics + _case4_metrics,
+    6: _shared_metrics + _case6_metrics,
     10: _shared_metrics + _case10_metrics,
 }
 

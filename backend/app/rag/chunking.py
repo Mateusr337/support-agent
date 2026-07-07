@@ -1,9 +1,14 @@
 from dataclasses import dataclass
 
-from app.rag.loaders.pdf import DocumentPage
+from app.rag.loaders.base import DocumentPage
 
 DEFAULT_CHUNK_SIZE = 1000
 DEFAULT_CHUNK_OVERLAP = 200
+SECTION_BREAK_MARKERS = (
+    "\n\n[Figure OCR]",
+    "\n\n[Native]",
+    "\n\n[Page ",
+)
 
 
 @dataclass(frozen=True)
@@ -12,6 +17,7 @@ class TextChunk:
     source: str
     page_number: int
     chunk_index: int
+    content_type: str = "native"
 
 
 def chunk_text(
@@ -73,6 +79,7 @@ def chunk_pages(
                     source=page.source,
                     page_number=page.page_number,
                     chunk_index=chunk_index,
+                    content_type=page.content_type,
                 )
             )
             chunk_index += 1
@@ -91,7 +98,7 @@ def _find_break_point(text: str, start: int, end: int) -> int:
     segment = text[start:end]
     min_break = len(segment) // 2
 
-    for separator in ("\n\n", "\n", " "):
+    for separator in (*SECTION_BREAK_MARKERS, "\n\n", "\n", " "):
         index = segment.rfind(separator)
         if index >= min_break:
             return start + index + len(separator)

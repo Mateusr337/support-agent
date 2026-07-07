@@ -138,3 +138,35 @@ def test_list_for_metrics_filters_by_date_range(db_session):
         to_dt=now + timedelta(hours=1),
     )
     assert len(rows) == 1
+
+
+def test_list_for_metrics_accepts_naive_utc_bounds(db_session):
+    from datetime import UTC, datetime, timedelta
+
+    user = _create_user(db_session)
+    session = ChatSession(user_id=user.id)
+    db_session.add(session)
+    db_session.commit()
+
+    naive_now = datetime.now(UTC).replace(tzinfo=None)
+    log = AuditLog(
+        session_id=session.id,
+        user_id=user.id,
+        turn_id=uuid4(),
+        type="Token Usage",
+        status="info",
+        message="LLM token usage",
+        data={"total_tokens": 5, "prompt_tokens": 3, "completion_tokens": 2},
+        created_at=naive_now,
+    )
+    db_session.add(log)
+    db_session.commit()
+
+    repository = AuditLogRepository(db_session)
+    rows = repository.list_for_metrics(
+        user_id=user.id,
+        from_dt=naive_now - timedelta(hours=1),
+        to_dt=naive_now + timedelta(hours=1),
+    )
+
+    assert len(rows) == 1

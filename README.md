@@ -254,7 +254,7 @@ Tests use **pytest**, **pytest-cov**, and **httpx** (`backend/requirements-dev.t
 
 Tests use an in-memory SQLite database (no Postgres required). Override `get_db` via `app.dependency_overrides` in `conftest.py`.
 
-Current coverage: **97.1%** on `app/` (**180 tests**, threshold 95%).
+Current coverage: **97.2%** on `app/` (**247 tests**, threshold 95%).
 
 ```bash
 cd backend
@@ -282,12 +282,15 @@ python -m app.scripts.run_deepeval --base-url http://localhost:8000
 
 Latest report: [backend/eval_report.json](backend/eval_report.json). Case specs: [specs-docs/agent-manual-tests.md](specs-docs/agent-manual-tests.md).
 
-| Case                  | Answer Relevancy | Faithfulness | Contextual Relevancy / Hallucination | GEval            | Pass |
-| --------------------- | ---------------- | ------------ | ------------------------------------ | ---------------- | ---- |
-| 1 - Laptop safety     | 1.00             | 1.00         | Contextual 0.60                      | SafetyFacts 1.00 | Yes  |
-| 10 - No hallucination | 0.75             | 1.00         | Hallucination 0.00                   | NoPrinthead 1.00 | Yes  |
+| Case                    | Answer Relevancy | Faithfulness | Contextual Relevancy / Hallucination | GEval                 | Pass |
+| ----------------------- | ---------------- | ------------ | ------------------------------------ | --------------------- | ---- |
+| 1 - Laptop safety       | 1.00             | 1.00         | Contextual 0.32                      | SafetyFacts 1.00      | No   |
+| 2 - SSD self-repair     | 1.00             | 1.00         | Contextual 0.71                      | SsdSelfRepair 0.93    | Yes  |
+| 4 - Memory upgrade      | 1.00             | 1.00         | Contextual 0.23                      | MemoryUpgrade 0.78    | No   |
+| 6 - Printer Wi-Fi reset | 1.00             | 1.00         | Contextual 0.47                      | WifiReset 1.00        | No   |
+| 10 - No hallucination   | 1.00             | 1.00         | Hallucination 0.00                   | NoPrinthead 1.00      | Yes  |
 
-**2/2** cases passed (2026-07-04).
+**2/5** cases passed (2026-07-06). Failed cases (informational): Contextual Relevancy on cases 1, 4, 6.
 
 ## Current status
 
@@ -303,13 +306,13 @@ Implemented:
 - Audit logging: backend pipeline events (agent, LLM, tools) + `/api/v1/audit/logs` API
 - Frontend: auth (login / register), chat UI with scroll-to-load-older messages, audit logs UI with infinite scroll
 - LLM integration: `core/llm/` adapters and `SupportAgent` wired into `ChatService`
-- Backend test suite: **180 tests**, **97.1%** coverage on `app/`
+- Backend test suite: **247 tests**, **97.2%** coverage on `app/`
 - [LLM quality benchmark](#llm-quality-benchmark-deepeval)
 - Load tests (Locust Mode A): **300 users, 0% errors**, ~147 req/s — [summary](#load--scalability-summary)
 
 Not yet implemented:
 
-- Full 10-case DeepEval suite (cases 2–9)
+- Remaining DeepEval cases (3, 5, 7–9); contextual relevancy tuning on cases 1, 4, 6
 - Production ingest pipeline, admin UI, guardrails — [scaling-to-production.md](specs-docs/scaling-to-production.md)
 
 Manual step before RAG answers work: place HP PDFs in `rag-docs/` and run the ingest CLI (see [RAG and document corpus](#rag-and-document-corpus)).

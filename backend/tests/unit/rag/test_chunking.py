@@ -1,7 +1,7 @@
 import pytest
 
 from app.rag.chunking import TextChunk, chunk_pages, chunk_text
-from app.rag.loaders.pdf import DocumentPage
+from app.rag.loaders.base import DocumentPage
 
 
 def test_chunk_text_returns_single_chunk_for_short_text():
@@ -34,6 +34,16 @@ def test_chunk_text_prefers_breaking_at_paragraph_boundary():
     assert chunks == [first, second]
 
 
+def test_chunk_text_prefers_breaking_at_section_marker():
+    first = "A" * 60
+    second = "B" * 60
+    text = f"{first}\n\n[Figure OCR]\n{second}"
+
+    chunks = chunk_text(text, chunk_size=100, chunk_overlap=0)
+
+    assert chunks == [f"{first}\n\n[Figure OCR]", second]
+
+
 def test_chunk_text_raises_for_invalid_chunk_size():
     with pytest.raises(ValueError, match="chunk_size must be positive"):
         chunk_text("hello", chunk_size=0)
@@ -46,8 +56,18 @@ def test_chunk_text_raises_for_invalid_chunk_overlap():
 
 def test_chunk_pages_assigns_metadata_and_indexes():
     pages = [
-        DocumentPage(text="Alpha paragraph.", page_number=1, source="manual.pdf"),
-        DocumentPage(text="Beta paragraph.", page_number=2, source="manual.pdf"),
+        DocumentPage(
+            text="Alpha paragraph.",
+            page_number=1,
+            source="manual.pdf",
+            has_native_text=True,
+        ),
+        DocumentPage(
+            text="Beta paragraph.",
+            page_number=2,
+            source="manual.pdf",
+            has_native_text=True,
+        ),
     ]
 
     chunks = chunk_pages(pages, chunk_size=1000, chunk_overlap=0)
@@ -58,12 +78,14 @@ def test_chunk_pages_assigns_metadata_and_indexes():
             source="manual.pdf",
             page_number=1,
             chunk_index=0,
+            content_type="native",
         ),
         TextChunk(
             text="Beta paragraph.",
             source="manual.pdf",
             page_number=2,
             chunk_index=1,
+            content_type="native",
         ),
     ]
 

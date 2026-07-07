@@ -1,22 +1,22 @@
 {
-  "run_at": "2026-07-04T21:41:44.035166+00:00",
+  "run_at": "2026-07-07T01:22:50.949518+00:00",
   "base_url": "http://localhost:8000",
   "judge_model": "gpt-4o",
-  "total_cases": 2,
-  "passed_cases": 1,
+  "total_cases": 5,
+  "passed_cases": 2,
   "cases": [
     {
       "id": 1,
       "name": "laptop_safety",
       "passed": false,
-      "completion_time_ms": 4604,
+      "completion_time_ms": 4084,
       "latency": {
         "llm_latency_ms": [
-          772,
-          1540
+          1132,
+          548
         ],
         "tool_latency_ms": [
-          1767
+          546
         ]
       },
       "retrieved_sources": [
@@ -28,7 +28,7 @@
           "name": "Answer Relevancy",
           "score": 1.0,
           "passed": true,
-          "reason": "The score is 1.00 because the response perfectly addressed the question about using an OMEN laptop on a bed or lap for extended gaming sessions, with no irrelevant information included. Great job on staying focused and relevant!"
+          "reason": "The score is 1.00 because the response perfectly addressed the question about using an OMEN laptop on a bed or lap for extended gaming sessions, without any irrelevant information. Great job on staying focused and relevant!"
         },
         {
           "name": "Faithfulness",
@@ -38,27 +38,165 @@
         },
         {
           "name": "Contextual Relevancy",
-          "score": 0.16981132075471697,
+          "score": 0.3225806451612903,
           "passed": false,
-          "reason": "The score is 0.17 because the majority of the retrieval context statements are unrelated to the input question about using an OMEN laptop on a bed or lap for gaming. However, relevant statements like 'Reduce the possibility of heat-related injuries or of overheating the computer by following the practices described' and 'WARNING! To reduce the possibility of heat-related injuries or of overheating the computer, do not place the computer directly on your lap or obstruct the computer air vents' provide some pertinent information."
+          "reason": "The score is 0.32 because while the context provides relevant safety warnings about using the laptop on soft surfaces, such as 'do not place the computer directly on your lap or obstruct the computer air vents,' the majority of the context focuses on unrelated technical specifications and maintenance topics."
         },
         {
           "name": "SafetyFacts [GEval]",
           "score": 1.0,
           "passed": true,
-          "reason": "The response aligns perfectly with the evaluation steps. It warns against using the laptop on a lap or bed, mentions the risk of blocking air vents, recommends using a hard flat surface, and warns about soft surfaces blocking airflow. All key details from the test case parameters are addressed."
+          "reason": "The response fully aligns with the evaluation steps. It warns against using the laptop on a lap or bed, mentions the risk of blocking air vents, recommends using a hard flat surface, and warns about soft surfaces blocking airflow. All key details from the test case parameters are addressed."
         }
       ],
-      "answer_preview": "It is not recommended to use your OMEN laptop on your bed or lap for long gaming sessions. The manuals advise against placing the computer directly on your lap or obstructing the air vents, as this can lead to heat-related injuries or overheating. It is best to use the laptop on a hard, flat surface"
+      "answer_preview": "Using your OMEN 17.3 inch Gaming Laptop on your bed or lap for long gaming sessions is not recommended. The manual states that to reduce the risk of heat-related injuries or overheating, you should not place the laptop directly on your lap or obstruct its air vents. It's best to use the laptop on a "
+    },
+    {
+      "id": 2,
+      "name": "ssd_self_repair",
+      "passed": true,
+      "completion_time_ms": 4823,
+      "latency": {
+        "llm_latency_ms": [
+          1954,
+          492
+        ],
+        "tool_latency_ms": [
+          535
+        ]
+      },
+      "retrieved_sources": [
+        "OMEN 17.3 inch Gaming Laptop PC.pdf"
+      ],
+      "expected_source": "OMEN 17.3 inch Gaming Laptop PC.pdf",
+      "metrics": [
+        {
+          "name": "Answer Relevancy",
+          "score": 1.0,
+          "passed": true,
+          "reason": "The score is 1.00 because the response perfectly addressed the question about replacing the SSD on the OMEN 17 laptop without any irrelevant information. Great job on staying focused and providing a clear, concise answer!"
+        },
+        {
+          "name": "Faithfulness",
+          "score": 1.0,
+          "passed": true,
+          "reason": "The score is 1.00 because there are no contradictions, indicating a perfect alignment between the actual output and the retrieval context. Great job maintaining accuracy and consistency!"
+        },
+        {
+          "name": "Contextual Relevancy",
+          "score": 0.7058823529411765,
+          "passed": true,
+          "reason": "The score is 0.71 because while the context provides detailed procedures for removing and replacing the SSD, such as 'To remove the solid-state drive, use this procedure and illustration,' it lacks direct confirmation on whether the user can perform the replacement themselves without voiding the warranty, as indicated by 'The Customer Self-Repair program is not available in all locations.'"
+        },
+        {
+          "name": "SsdSelfRepairFacts [GEval]",
+          "score": 0.9301864364838932,
+          "passed": true,
+          "reason": "The response effectively distinguishes between Customer Self-Repair and authorized service parts by mentioning the Customer Self-Repair program. It includes SSD replacement as part of this program and provides high-level steps such as removing the bottom cover and disconnecting the battery. Additionally, it warns about using unsupported parts potentially voiding the warranty. However, it could be more explicit about the risk of damaging the computer with wrong parts."
+        }
+      ],
+      "answer_preview": "Yes, you can replace the SSD on your OMEN 17 laptop yourself. The process is part of the Customer Self-Repair program, which allows you to remove and replace certain components, including the solid-state drive (SSD). \n\nTo do this, you'll need to prepare the computer for disassembly, which includes t"
+    },
+    {
+      "id": 4,
+      "name": "memory_upgrade",
+      "passed": false,
+      "completion_time_ms": 3728,
+      "latency": {
+        "llm_latency_ms": [
+          970,
+          597
+        ],
+        "tool_latency_ms": [
+          704
+        ]
+      },
+      "retrieved_sources": [
+        "OMEN 17.3 inch Gaming Laptop PC.pdf"
+      ],
+      "expected_source": "OMEN 17.3 inch Gaming Laptop PC.pdf",
+      "metrics": [
+        {
+          "name": "Answer Relevancy",
+          "score": 1.0,
+          "passed": true,
+          "reason": "The score is 1.00 because the response perfectly addressed the question about RAM capacity and type for the OMEN laptop without any irrelevant information. Great job on staying focused and providing a clear, concise answer!"
+        },
+        {
+          "name": "Faithfulness",
+          "score": 1.0,
+          "passed": true,
+          "reason": "The score is 1.00 because there are no contradictions, indicating a perfect alignment between the actual output and the retrieval context. Great job maintaining accuracy and consistency!"
+        },
+        {
+          "name": "Contextual Relevancy",
+          "score": 0.22857142857142856,
+          "passed": false,
+          "reason": "The score is 0.23 because the majority of the context discusses topics unrelated to RAM, such as display specifications, processors, and other hardware components. However, there are relevant statements like 'Memory Customer accessible or upgradeable Two SODIMM slots, dual-channel support DDR5-5600' that provide some information about RAM capacity and type."
+        },
+        {
+          "name": "MemoryUpgradeFacts [GEval]",
+          "score": 0.7751013827969297,
+          "passed": true,
+          "reason": "The response correctly mentions two SODIMM slots and dual-channel support, as well as supported configurations of 16 GB and 32 GB. However, it lacks the specification of DDR5-5600 memory at 1.1 V and does not explicitly state that the memory is customer accessible or upgradeable."
+        }
+      ],
+      "answer_preview": "The OMEN 17.3 inch Gaming Laptop PC supports a maximum RAM capacity of 32 GB, using two SODIMM slots with dual-channel support. The type of RAM it supports is DDR5-5600. You can install configurations of either 16 GB (8 GB x 2) or 32 GB (16 GB x 2) (OMEN 17.3 inch Gaming Laptop PC, page 8)."
+    },
+    {
+      "id": 6,
+      "name": "printer_wifi_reset",
+      "passed": false,
+      "completion_time_ms": 3908,
+      "latency": {
+        "llm_latency_ms": [
+          1230,
+          647
+        ],
+        "tool_latency_ms": [
+          389
+        ]
+      },
+      "retrieved_sources": [
+        "HP ENVY 6000 All-in-One series.pdf"
+      ],
+      "expected_source": "HP ENVY 6000 All-in-One series.pdf",
+      "metrics": [
+        {
+          "name": "Answer Relevancy",
+          "score": 1.0,
+          "passed": true,
+          "reason": "The score is 1.00 because the response perfectly addresses the question about resetting Wi-Fi on the HP ENVY 6000 and putting it in setup mode, with no irrelevant information included. Great job on providing a clear and focused answer!"
+        },
+        {
+          "name": "Faithfulness",
+          "score": 1.0,
+          "passed": true,
+          "reason": "The score is 1.00 because there are no contradictions, indicating that the actual output is perfectly aligned with the retrieval context. Great job maintaining accuracy and consistency!"
+        },
+        {
+          "name": "Contextual Relevancy",
+          "score": 0.4722222222222222,
+          "passed": false,
+          "reason": "The score is 0.47 because while there are relevant instructions such as 'Press and hold for at least three seconds to restore the network settings to default settings. This will also put the printer back into the Auto Wireless Connect (AWC) setup mode,' many other statements in the context do not directly address resetting Wi-Fi or entering setup mode, such as 'Use a USB cable to connect the printer to other devices.' and 'The statement is about cookies and the embedded web server, unrelated to resetting Wi-Fi or setup mode.' This mix of relevant and irrelevant information results in a moderate relevancy score."
+        },
+        {
+          "name": "WifiResetFacts [GEval]",
+          "score": 1.0,
+          "passed": true,
+          "reason": "The Actual Output fully aligns with the evaluation steps. It describes holding the Wi-Fi button on the back for at least 3 seconds, restoring network settings to default, putting the printer in Auto Wireless Connect (AWC) setup mode, and using the HP Smart app to complete the setup."
+        }
+      ],
+      "answer_preview": "To reset the Wi-Fi on your HP ENVY 6000 and put it back into setup mode, follow these steps:\n\n1. **Press and hold the Wi-Fi button** on the back of the printer for at least three seconds. This action will restore the network settings to default and put the printer into Auto Wireless Connect (AWC) se"
     },
     {
       "id": 10,
       "name": "no_printhead_hallucination",
       "passed": true,
-      "completion_time_ms": 1203,
+      "completion_time_ms": 1459,
       "latency": {
         "llm_latency_ms": [
-          1183
+          687
         ],
         "tool_latency_ms": []
       },
@@ -67,15 +205,15 @@
       "metrics": [
         {
           "name": "Answer Relevancy",
-          "score": 0.75,
+          "score": 1.0,
           "passed": true,
-          "reason": "The score is 0.75 because the response provides useful information on replacing the printhead on an OMEN gaming laptop. However, it includes a suggestion to ask questions about other aspects, which is not directly relevant to the task at hand, slightly lowering the score."
+          "reason": "The score is 1.00 because the response perfectly addresses the question about replacing the printhead on an OMEN gaming laptop without any irrelevant information. Great job on staying focused and providing a clear, concise answer!"
         },
         {
           "name": "Faithfulness",
           "score": 1.0,
           "passed": true,
-          "reason": "The score is 1.00 because there are no contradictions between the actual output and the retrieval context. Everything aligns perfectly, showcasing a high level of accuracy and consistency."
+          "reason": "The score is 1.00 because there are no contradictions, indicating a perfect alignment between the actual output and the retrieval context. Great job maintaining accuracy and consistency!"
         },
         {
           "name": "Hallucination",
@@ -85,12 +223,12 @@
         },
         {
           "name": "NoPrintheadHallucination [GEval]",
-          "score": 0.99706877703086,
+          "score": 0.9999999999999998,
           "passed": true,
-          "reason": "The response correctly clarifies that the OMEN is a laptop and not a printer, meeting the criteria. It also states that no relevant documents were found for printhead replacement, aligning with the evaluation steps."
+          "reason": "The response correctly clarifies that the OMEN is a laptop and not a printer, meeting the criteria. It also states that no relevant documents were found regarding printhead replacement, aligning with the evaluation steps. There are no prohibited instructions included."
         }
       ],
-      "answer_preview": "Replacing the printhead does not apply to your OMEN gaming laptop, as laptops do not have printheads. The manuals do not document that procedure for this product. If you have questions about other aspects of your laptop, feel free to ask!"
+      "answer_preview": "The OMEN gaming laptop does not have a printhead, as it is not a printer. Printheads are specific to printers, and the manuals do not document any procedures related to printhead replacement for laptops. If you have questions about your laptop's features or troubleshooting, feel free to ask!"
     }
   ]
 }

@@ -11,6 +11,8 @@ class RetrievedChunk:
     source: str | None = None
     page_number: int | None = None
     score: float | None = None
+    product_name: str | None = None
+    product_type: str | None = None
 
 
 @dataclass(frozen=True)

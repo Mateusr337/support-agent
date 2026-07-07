@@ -273,13 +273,19 @@ def test_resolve_period_accepts_naive_custom_range():
     assert period.from_dt.tzinfo == UTC
 
 
+def test_log_date_converts_aware_datetime_to_utc_date():
+    value = datetime(2026, 7, 7, 3, 0, tzinfo=UTC)
+
+    assert _log_date(value) == date(2026, 7, 7)
+
+
 def test_get_metrics_handles_naive_created_at(db_session):
     user = _create_user(db_session)
     session = ChatSession(user_id=user.id)
     db_session.add(session)
     db_session.commit()
 
-    naive_now = datetime.now()
+    naive_now = datetime.now(UTC).replace(tzinfo=None)
     db_session.add(
         AuditLog(
             session_id=session.id,

@@ -2,7 +2,7 @@ import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.rag.service import IngestReport
+from app.rag.service import FileIngestStats, IngestReport
 from app.scripts import ingest_documents
 
 
@@ -12,7 +12,29 @@ def test_main_uses_default_documents_dir(mock_get_rag_service, tmp_path: Path, c
     documents_dir.mkdir()
     mock_service = MagicMock()
     mock_service.ingest_directory = AsyncMock(
-        return_value=IngestReport(files_processed=1, chunks_indexed=3)
+        return_value=IngestReport(
+            files_processed=1,
+            chunks_indexed=3,
+            total_pages=10,
+            pages_indexed=8,
+            pages_skipped=2,
+            pages_native_only=6,
+            pages_ocr_only=1,
+            pages_mixed=1,
+            file_stats=(
+                FileIngestStats(
+                    filename="manual.pdf",
+                    total_pages=10,
+                    pages_indexed=8,
+                    pages_skipped=2,
+                    pages_native_only=6,
+                    pages_ocr_only=1,
+                    pages_mixed=1,
+                    chunks_indexed=3,
+                    duration_seconds=1.2,
+                ),
+            ),
+        )
     )
     mock_get_rag_service.return_value = mock_service
 
@@ -26,6 +48,10 @@ def test_main_uses_default_documents_dir(mock_get_rag_service, tmp_path: Path, c
     output = capsys.readouterr().out
     assert "Files indexed: 1" in output
     assert "Chunks indexed: 3" in output
+    assert "total=10" in output
+    assert "indexed=8" in output
+    assert "Per file:" in output
+    assert "manual.pdf:" in output
 
 
 @patch("app.scripts.ingest_documents.get_rag_service")

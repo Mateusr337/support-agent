@@ -98,7 +98,11 @@ backend/
 │   │   ├── retriever.py            # (temporary) NoOpRetriever until RagService
 │   │   ├── service.py              # (planned) RagService: ingest_* + search
 │   │   ├── loaders/
-│   │   │   └── pdf.py              # PDF → page text
+│   │   │   ├── base.py             # DocumentLoader protocol, DTOs
+│   │   │   ├── factory.py          # get_document_loader()
+│   │   │   ├── pdf.py              # PdfDocumentLoader (PyMuPDF + OCR)
+│   │   │   ├── ocr.py              # Tesseract wrapper
+│   │   │   └── utils.py              # merge/normalize page text
 │   │   └── embeddings/
 │   │       ├── base.py             # EmbeddingProvider protocol
 │   │       ├── openai.py
@@ -384,7 +388,7 @@ Run with in-memory SQLite (`conftest.py` overrides `get_db`). Coverage policy: s
 | Domain business rule | `services/<domain>_service.py` |
 | LLM adapter (chat) | `core/llm/<vendor>.py` + register in `factory.py` |
 | Embedding adapter | `rag/embeddings/<vendor>.py` + register in `factory.py` |
-| PDF loader / chunking | `rag/loaders/`, `rag/chunking.py` |
+| PDF loader / chunking | `rag/loaders/` (`get_document_loader`), `rag/chunking.py` |
 | RAG ingest + search | `rag/service.py` |
 | New tool | `tools/<tool_name>.py` + register in `tools/registry.py` |
 | New agent | `agents/<name>/agent.py` + register in `agents/registry.py` |

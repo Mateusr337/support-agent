@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     qdrant_collection: str = "support_documents"
     documents_dir: str = ""
+    rag_ocr_min_page_text: int = 50
+    rag_ocr_min_image_px: int = 100
+    rag_tesseract_lang: str = "eng"
     load_test: bool = False
     db_pool_size: int = 10
     db_max_overflow: int = 20

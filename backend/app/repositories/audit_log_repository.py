@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditLog
+
+
+def _metrics_bound(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(UTC).replace(tzinfo=None)
 
 
 class AuditLogRepository:
@@ -77,8 +83,8 @@ class AuditLogRepository:
             select(AuditLog)
             .where(
                 AuditLog.user_id == user_id,
-                AuditLog.created_at >= from_dt,
-                AuditLog.created_at <= to_dt,
+                AuditLog.created_at >= _metrics_bound(from_dt),
+                AuditLog.created_at <= _metrics_bound(to_dt),
             )
             .order_by(AuditLog.created_at.asc())
         )

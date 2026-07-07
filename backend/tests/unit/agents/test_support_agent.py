@@ -6,9 +6,10 @@ from app.agents.registry import AGENTS, UnknownAgentError, build_agent
 from app.agents.support import SupportAgent
 from app.agents.support.prompts import SYSTEM_PROMPT
 from app.core.llm.base import ChatStreamEvent, Message, ToolCallRequest
+from app.rag.manifest import DocumentManifestEntry
 from app.tools.base import RetrievedChunk, ToolContext
 from app.tools.registry import ToolDeps, build_tool_set
-from app.tools.search_documents import DEFAULT_SCORE_THRESHOLD, DEFAULT_TOP_K, SearchDocumentsTool
+from app.tools.search_documents import DEFAULT_TOP_K, SearchDocumentsTool
 
 
 class FakeSearcher:
@@ -17,11 +18,24 @@ class FakeSearcher:
         self.last_query: str | None = None
         self.last_top_k: int | None = None
         self.last_score_threshold: float | None = None
+        self.last_product_name: str | None = None
+        self.last_product_type: str | None = None
 
-    async def search(self, query: str, *, top_k: int = 5, score_threshold: float | None = None, **kwargs) -> list[RetrievedChunk]:
+    async def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        score_threshold: float | None = None,
+        product_name: str | None = None,
+        product_type: str | None = None,
+        **kwargs,
+    ) -> list[RetrievedChunk]:
         self.last_query = query
         self.last_top_k = top_k
         self.last_score_threshold = score_threshold
+        self.last_product_name = product_name
+        self.last_product_type = product_type
         return self._chunks
 
 
@@ -276,7 +290,7 @@ def test_search_documents_tool_uses_default_top_k():
     asyncio.run(tool.run({"query": "reset printer"}, context=ToolContext()))
 
     assert searcher.last_top_k == DEFAULT_TOP_K
-    assert searcher.last_score_threshold == DEFAULT_SCORE_THRESHOLD
+    assert searcher.last_score_threshold is None
 
 
 def test_search_documents_tool_uses_custom_score_threshold():
@@ -286,6 +300,163 @@ def test_search_documents_tool_uses_custom_score_threshold():
     asyncio.run(tool.run({"query": "reset printer"}, context=ToolContext()))
 
     assert searcher.last_score_threshold == 0.35
+
+
+def test_search_documents_tool_passes_product_filters():
+    entries = (
+        DocumentManifestEntry(
+            filename="HP ENVY 6000 All-in-One series.pdf",
+            product_name="HP ENVY 6000 All-in-One series",
+            product_type="printer",
+        ),
+    )
+    searcher = FakeSearcher(
+        chunks=[
+            RetrievedChunk(
+                text="Hold the Wi-Fi button for 3 seconds.",
+                source="HP ENVY 6000 All-in-One series.pdf",
+                page_number=12,
+                score=0.9,
+            )
+        ]
+    )
+    tool = SearchDocumentsTool(searcher, manifest_entries=entries)
+
+    asyncio.run(
+        tool.run(
+            {
+                "query": "reset Wi-Fi",
+                "product": "HP ENVY 6000 All-in-One series",
+                "product_type": "printer",
+            },
+            context=ToolContext(),
+        )
+    )
+
+    assert searcher.last_product_name == "HP ENVY 6000 All-in-One series"
+    assert searcher.last_product_type == "printer"
+
+
+def test_search_documents_tool_resolves_colloquial_product_name():
+    entries = (
+        DocumentManifestEntry(
+            filename="OMEN 17.3 inch Gaming Laptop PC.pdf",
+            product_name="OMEN 17.3 inch Gaming Laptop PC",
+            product_type="laptop",
+        ),
+    )
+    searcher = FakeSearcher(
+        chunks=[
+            RetrievedChunk(
+                text="6 cell, 83 Whr polymer battery.",
+                source="OMEN 17.3 inch Gaming Laptop PC.pdf",
+                page_number=5,
+                score=0.92,
+            )
+        ]
+    )
+    tool = SearchDocumentsTool(searcher, manifest_entries=entries)
+
+    asyncio.run(
+        tool.run(
+            {
+                "query": "battery",
+                "product": "HP OMEN 17.3",
+                "product_type": "laptop",
+            },
+            context=ToolContext(),
+        )
+    )
+
+    assert searcher.last_product_name == "OMEN 17.3 inch Gaming Laptop PC"
+    assert searcher.last_query == "battery"
+
+
+def test_search_documents_tool_retries_without_product_filter_when_empty():
+    class EmptyThenResultsSearcher(FakeSearcher):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls: list[tuple[str | None, str | None]] = []
+
+        async def search(self, query, *, top_k=DEFAULT_TOP_K, score_threshold=None, product_name=None, product_type=None):
+            self.calls.append((product_name, product_type))
+            if product_name is not None:
+                return []
+            return [
+                RetrievedChunk(
+                    text="Battery details",
+                    source="manual.pdf",
+                    page_number=3,
+                    score=0.88,
+                )
+            ]
+
+    searcher = EmptyThenResultsSearcher()
+    entries = (
+        DocumentManifestEntry(
+            filename="OMEN 17.3 inch Gaming Laptop PC.pdf",
+            product_name="OMEN 17.3 inch Gaming Laptop PC",
+            product_type="laptop",
+        ),
+    )
+    tool = SearchDocumentsTool(searcher, manifest_entries=entries)
+
+    result = asyncio.run(
+        tool.run(
+            {
+                "query": "battery type",
+                "product": "OMEN 17.3 inch Gaming Laptop PC",
+                "product_type": "laptop",
+            },
+            context=ToolContext(),
+        )
+    )
+
+    assert searcher.calls == [
+        ("OMEN 17.3 inch Gaming Laptop PC", "laptop"),
+        (None, "laptop"),
+    ]
+    assert "Battery details" in result.content
+
+
+def test_search_documents_tool_ignores_blank_product_filters():
+    searcher = FakeSearcher()
+    tool = SearchDocumentsTool(searcher)
+
+    asyncio.run(
+        tool.run(
+            {
+                "query": "reset Wi-Fi",
+                "product": "  ",
+                "product_type": "",
+            },
+            context=ToolContext(),
+        )
+    )
+
+    assert searcher.last_product_name is None
+    assert searcher.last_product_type is None
+
+
+def test_search_documents_tool_formats_page_number_in_header():
+    tool = SearchDocumentsTool(
+        FakeSearcher(
+            [
+                RetrievedChunk(
+                    text="Reset steps",
+                    source="manual.pdf",
+                    page_number=2,
+                    score=0.91,
+                    product_name="OMEN Laptop",
+                    product_type="laptop",
+                )
+            ]
+        )
+    )
+
+    result = asyncio.run(tool.run({"query": "reset printer"}, context=ToolContext()))
+
+    assert "[1] p. 2" in result.content
 
 
 def test_search_documents_tool_logs_tool_call_and_result():
@@ -320,6 +491,8 @@ def test_search_documents_tool_logs_tool_call_and_result():
     tool_result = audit_log.info.call_args_list[1].kwargs
     assert tool_call["type"] == "Tool Call"
     assert tool_call["data"]["query"] == "reset printer"
+    assert tool_call["data"]["product"] is None
+    assert tool_call["data"]["product_type"] is None
     assert tool_result["type"] == "Tool Result"
     assert tool_result["data"]["result_count"] == 1
     assert isinstance(tool_result["data"]["latency_ms"], int)
@@ -327,6 +500,8 @@ def test_search_documents_tool_logs_tool_call_and_result():
         "source": "manual.pdf",
         "page_number": 2,
         "score": 0.91,
+        "product_name": None,
+        "product_type": None,
         "text": "Reset steps",
     }
 
